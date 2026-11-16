@@ -88,7 +88,6 @@
     <div class="container">
         <h1>Delivery Receipt (DR) Encoding System</h1>
         
-        <!-- Header Inputs -->
         <div class="row-container">
             <div class="form-group">
                 <label for="drNoInput">DR Number:</label>
@@ -105,7 +104,6 @@
             </div>
         </div>
 
-        <!-- Items Table -->
         <h2>Mga Items</h2>
         <table>
             <thead>
@@ -138,7 +136,6 @@
         </div>
     </div>
 
-    <!-- JavaScript -->
     <script>
         function addItemRow() {
             let tbody = document.getElementById('itemsTableBody');
@@ -203,8 +200,7 @@
                 return;
             }
 
-            // ⚠️ PALITAN NG TUNAY MONG APPS SCRIPT WEB APP URL
-            const scriptUrl = 'https://script.google.com/macros/s/AKfycbxjTxFvP1vL-qSi62OJgJmhQbKilBeE6SwNxJNIEcK-eIoVRVx4F0_SZIEjaQ8DZmgn/exec';
+            const scriptUrl = 'ILAGAY_MO_DITO_ANG_BAGONG_WEB_APP_URL';
 
             let payload = {
                 token: "DR_OFFLINE_SECURE_2026",
