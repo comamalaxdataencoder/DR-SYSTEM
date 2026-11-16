@@ -4,22 +4,99 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DR OFFLINE Encoding System</title>
-    <!-- Tailwind CSS para sa mabilis at malinis na disenyo -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f9f9f9;
+            color: #333;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 20px;
+            border: 1px solid #ccc;
+        }
+        h1, h2 {
+            color: #2c3e50;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+        }
+        .row-container {
+            display: flex;
+            gap: 15px;
+        }
+        .row-container .form-group {
+            flex: 1;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        button {
+            padding: 8px 15px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .btn-add {
+            background-color: #27ae60;
+            color: white;
+            border: none;
+        }
+        .btn-save {
+            background-color: #2980b9;
+            color: white;
+            border: none;
+            float: right;
+        }
+        .btn-delete {
+            background-color: #c0392b;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+        }
+        .clearfix::after {
+            content: "";
+            clear: both;
+            display: table;
+        }
+    </style>
 </head>
-<body class="bg-slate-100 min-h-screen p-6">
-    <div class="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow-md">
-        <h1 class="text-2xl font-bold mb-6 text-slate-800">Delivery Receipt (DR) Encoding System</h1>
+<body>
+    <div class="container">
+        <h1>Delivery Receipt (DR) Encoding System</h1>
         
-        <!-- Header Form Inputs -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1">DR Number:</label>
-                <input type="text" id="drNoInput" class="w-full border border-slate-300 rounded p-2 focus:ring-2 focus:ring-blue-500" placeholder="Ilagay ang DR #">
+        <!-- Header Inputs -->
+        <div class="row-container">
+            <div class="form-group">
+                <label for="drNoInput">DR Number:</label>
+                <input type="text" id="drNoInput" placeholder="Ilagay ang DR #">
             </div>
-            <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1">Piliin ang Shop / Store:</label>
-                <select id="shopSelect" class="w-full border border-slate-300 rounded p-2 focus:ring-2 focus:ring-blue-500">
+            <div class="form-group">
+                <label for="shopSelect">Piliin ang Shop / Store:</label>
+                <select id="shopSelect">
                     <option value="Watsons">Watsons</option>
                     <option value="Landers">Landers</option>
                     <option value="SM Beauty">SM Beauty</option>
@@ -29,61 +106,57 @@
         </div>
 
         <!-- Items Table -->
-        <h2 class="text-lg font-semibold mb-3 text-slate-700">Mga Items</h2>
-        <div class="overflow-x-auto mb-4">
-            <table class="w-full border-collapse border border-slate-300 text-sm">
-                <thead>
-                    <tr class="bg-slate-100">
-                        <th class="border border-slate-300 p-2">Deliver To</th>
-                        <th class="border border-slate-300 p-2">Item Code</th>
-                        <th class="border border-slate-300 p-2">Description</th>
-                        <th class="border border-slate-300 p-2">Qty</th>
-                        <th class="border border-slate-300 p-2">Amount</th>
-                        <th class="border border-slate-300 p-2">Action</th>
-                    </tr>
-                </thead>
-                <tbody id="itemsTableBody">
-                    <tr class="item-row">
-                        <td class="border border-slate-300 p-2"><input type="text" class="deliver-to w-full border p-1 rounded" placeholder="Branch"></td>
-                        <td class="border border-slate-300 p-2"><input type="text" class="item-code w-full border p-1 rounded" placeholder="SKU/Code"></td>
-                        <td class="border border-slate-300 p-2"><input type="text" class="description w-full border p-1 rounded" placeholder="Pangalan ng Item"></td>
-                        <td class="border border-slate-300 p-2"><input type="number" class="qty w-full border p-1 rounded" placeholder="0"></td>
-                        <td class="border border-slate-300 p-2"><input type="number" step="0.01" class="amount w-full border p-1 rounded" placeholder="0.00"></td>
-                        <td class="border border-slate-300 p-2 text-center">
-                            <button type="button" onclick="removeItemRow(this)" class="bg-red-500 text-white px-2 py-1 rounded text-xs">Tanggalin</button>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+        <h2>Mga Items</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Deliver To</th>
+                    <th>Item Code</th>
+                    <th>Description</th>
+                    <th>Qty</th>
+                    <th>Amount</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="itemsTableBody">
+                <tr class="item-row">
+                    <td><input type="text" class="deliver-to" placeholder="Branch"></td>
+                    <td><input type="text" class="item-code" placeholder="SKU/Code"></td>
+                    <td><input type="text" class="description" placeholder="Pangalan ng Item"></td>
+                    <td><input type="number" class="qty" placeholder="0"></td>
+                    <td><input type="number" step="0.01" class="amount" placeholder="0.00"></td>
+                    <td style="text-align: center;">
+                        <button type="button" class="btn-delete" onclick="removeItemRow(this)">Tanggalin</button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
 
-        <div class="flex justify-between mb-6">
-            <button type="button" onclick="addItemRow()" class="bg-emerald-600 text-white px-4 py-2 rounded text-sm hover:bg-emerald-700">+ Magdagdag ng Item</button>
-            <button type="button" onclick="saveToGoogleDrive()" class="bg-blue-600 text-white px-6 py-2 rounded font-semibold hover:bg-blue-700">💾 Save to Google Drive</button>
+        <div class="clearfix">
+            <button type="button" class="btn-add" onclick="addItemRow()">+ Magdagdag ng Item</button>
+            <button type="button" class="btn-save" onclick="saveToGoogleDrive()">💾 Save to Google Drive</button>
         </div>
     </div>
 
-    <!-- JavaScript para sa Sistema at Drive Integration -->
+    <!-- JavaScript -->
     <script>
-        // Magdagdag ng bagong row sa table
         function addItemRow() {
             let tbody = document.getElementById('itemsTableBody');
             let newRow = document.createElement('tr');
             newRow.classList.add('item-row');
             newRow.innerHTML = `
-                <td class="border border-slate-300 p-2"><input type="text" class="deliver-to w-full border p-1 rounded" placeholder="Branch"></td>
-                <td class="border border-slate-300 p-2"><input type="text" class="item-code w-full border p-1 rounded" placeholder="SKU/Code"></td>
-                <td class="border border-slate-300 p-2"><input type="text" class="description w-full border p-1 rounded" placeholder="Pangalan ng Item"></td>
-                <td class="border border-slate-300 p-2"><input type="number" class="qty w-full border p-1 rounded" placeholder="0"></td>
-                <td class="border border-slate-300 p-2"><input type="number" step="0.01" class="amount w-full border p-1 rounded" placeholder="0.00"></td>
-                <td class="border border-slate-300 p-2 text-center">
-                    <button type="button" onclick="removeItemRow(this)" class="bg-red-500 text-white px-2 py-1 rounded text-xs">Tanggalin</button>
+                <td><input type="text" class="deliver-to" placeholder="Branch"></td>
+                <td><input type="text" class="item-code" placeholder="SKU/Code"></td>
+                <td><input type="text" class="description" placeholder="Pangalan ng Item"></td>
+                <td><input type="number" class="qty" placeholder="0"></td>
+                <td><input type="number" step="0.01" class="amount" placeholder="0.00"></td>
+                <td style="text-align: center;">
+                    <button type="button" class="btn-delete" onclick="removeItemRow(this)">Tanggalin</button>
                 </td>
             `;
             tbody.appendChild(newRow);
         }
 
-        // Tanggalin ang row
         function removeItemRow(button) {
             let row = button.closest('tr');
             if (document.querySelectorAll('.item-row').length > 1) {
@@ -93,7 +166,6 @@
             }
         }
 
-        // Pag-save sa Google Drive gamit ang Apps Script Web App at Secret Token
         async function saveToGoogleDrive() {
             const drNo = document.getElementById('drNoInput').value.trim();
             const shopName = document.getElementById('shopSelect').value;
@@ -131,7 +203,7 @@
                 return;
             }
 
-            // ⚠️ ILAGAY DITO ANG APPS SCRIPT WEB APP URL MO
+            // ⚠️ PALITAN NG TUNAY MONG APPS SCRIPT WEB APP URL
             const scriptUrl = 'https://script.google.com/macros/s/AKfycbxjTxFvP1vL-qSi62OJgJmhQbKilBeE6SwNxJNIEcK-eIoVRVx4F0_SZIEjaQ8DZmgn/exec';
 
             let payload = {
