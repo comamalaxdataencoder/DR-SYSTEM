@@ -44,6 +44,8 @@
         .btn-add { margin-top: 8px; background-color: #334155; color: white; padding: 6px 12px; font-size: 12px; cursor: pointer; border: none; border-radius: 4px; }
         .btn-del { background-color: #b91c1c; color: white; padding: 2px 6px; font-size: 10px; cursor: pointer; border: none; border-radius: 4px; }
         button:disabled { opacity: .65; cursor: wait; }
+        .shop-drive-link { width: 100%; padding: 10px; border: 1px solid #0891b2; background: #123047; color: #e0f2fe; cursor: pointer; font-weight: 600; }
+        .shop-drive-link:hover { background: #155e75; }
         @media print {
             body { background: #fff; color: #000; padding: 0; }
             .actions, #galleryDashboard, .btn-add, .btn-del { display: none !important; }
@@ -277,8 +279,13 @@
             card.onclick = () => selectShopFromGallery(shopName);
             card.innerHTML = `
                 <div class="shop-card-header"><h3>${shopName}</h3></div>
-                <div class="shop-card-footer"><span>${count} Saved</span><span>📂 Open</span></div>
+                <div class="shop-card-footer"><span>${count} Local Records</span><span>📂 Open DR Form</span></div>
+                <button type="button" class="shop-drive-link">☁️ Open Google Drive Folder</button>
             `;
+            card.querySelector('.shop-drive-link').addEventListener('click', (event) => {
+                event.stopPropagation();
+                openGoogleShopFolder(shopName);
+            });
             grid.appendChild(card);
         });
     }
@@ -516,6 +523,21 @@
         const found = folders.find(f => f.name.toLowerCase().replace(/[^a-z0-9]/g, '').startsWith(prefix));
         if (!found) throw new Error('Shop folder not found in DR OFFLINE: ' + shop);
         return found;
+    }
+
+    async function openGoogleShopFolder(shopName) {
+        // Open a blank tab immediately, avoiding popup blocking after OAuth.
+        const tab = window.open('about:blank', '_blank');
+        try {
+            await googleAuthorize();
+            const folder = await findGoogleShopFolder(shopName);
+            const url = 'https://drive.google.com/drive/folders/' + encodeURIComponent(folder.id);
+            if (tab) { tab.location.href = url; }
+            else { window.location.href = url; }
+        } catch (error) {
+            if (tab) tab.close();
+            alert('Cannot open Google Drive folder: ' + error.message);
+        }
     }
 
     async function uploadGoogleDriveJSON(folderId, filename, content) {
