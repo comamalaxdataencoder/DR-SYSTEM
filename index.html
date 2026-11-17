@@ -452,6 +452,11 @@
             return;
         }
 
+        if (!GOOGLE_APPS_SCRIPT_URL.startsWith('https://script.google.com/macros/s/') || !GOOGLE_APPS_SCRIPT_URL.endsWith('/exec')) {
+            alert('Invalid Apps Script URL. Use the deployed Web App URL ending in /exec.');
+            return;
+        }
+
         const payloadData = {
             shop: shop,
             drNo: drNo,
@@ -476,7 +481,7 @@
                 body: JSON.stringify(payloadData)
             });
 
-            // Keep a local history entry for the gallery counter.
+            // Local history only; this does not confirm a successful Google Drive save.
             let history = JSON.parse(localStorage.getItem('ijin_dr_history') || '[]');
             history.unshift({
                 savedAt: new Date().toISOString(),
@@ -490,7 +495,8 @@
                 'Save request sent to Google Drive.\n\n' +
                 'Shop: ' + shop + '\n' +
                 'DR Number: ' + drNo + '\n\n' +
-                'Please open the selected shop folder in Google Drive to verify that the JSON file was created.'
+                'This is NOT confirmation that the file was saved.\n' +
+                'Check Apps Script > Executions after clicking Save, then check the shop folder.'
             );
         } catch (error) {
             console.error('Google Drive save error:', error);
