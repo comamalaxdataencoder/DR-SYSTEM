@@ -53,7 +53,9 @@
             .brand h1, .brand p, .card-title, .field-table td.field-name { color: #000; }
             input, select, textarea { color: #000 !important; }
         }
-    </style>
+        .shop-card-footer .shop-drive-link { background: none; border: 0; color: #38bdf8; font: inherit; font-weight: 600; cursor: pointer; padding: 0; }
+    .shop-card-footer .shop-drive-link:hover { text-decoration: underline; }
+</style>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
@@ -279,8 +281,7 @@
             card.onclick = () => selectShopFromGallery(shopName);
             card.innerHTML = `
                 <div class="shop-card-header"><h3>${shopName}</h3></div>
-                <div class="shop-card-footer"><span>${count} Local Records</span><span>📂 Open DR Form</span></div>
-                <button type="button" class="shop-drive-link">☁️ Open Google Drive Folder</button>
+                <div class="shop-card-footer"><span>${count} Local Records</span><button type="button" class="shop-drive-link" title="Open this shop folder in Google Drive">📂 Open</button></div>
             `;
             card.querySelector('.shop-drive-link').addEventListener('click', (event) => {
                 event.stopPropagation();
