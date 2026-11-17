@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+a<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -56,17 +56,18 @@
         .shop-card-footer .shop-drive-link { background: none; border: 0; color: #38bdf8; font: inherit; font-weight: 600; cursor: pointer; padding: 0; }
     .shop-card-footer .shop-drive-link:hover { text-decoration: underline; }
 </style>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    
 </head>
 <body>
 
+<div id="authOverlay"><div class="auth-card"><h2 style="color:#38bdf8">I-JIN DR SYSTEM</h2><p style="margin:10px 0">Staff / Admin Sign In</p><form id="loginForm"><input id="loginEmail" type="email" placeholder="Work email" autocomplete="username" required><input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password" required><button type="submit" class="btn-blue">Sign In</button></form><p id="authError" role="alert" style="margin-top:12px"></p></div></div>
 <div class="container">
     <header>
         <div class="brand">
             <h1>I-JIN INTERNATIONAL</h1>
             <p>Delivery Receipt & Google Drive Sync System</p>
         </div>
-        <div class="actions">
+        <div class="actions"><span id="signedInAs" style="font-size:12px;color:#cbd5e1"></span><button id="adminBtn" class="btn-indigo" hidden onclick="toggleAdmin()">👤 Admin Dashboard</button><button class="btn-red" onclick="logoutStaff()">Log Out</button>
             <button class="btn-red" onclick="clearDraft()">🗑️ New / Clear</button>
             <button class="btn-indigo" onclick="openHistoryModal()">📜 View History</button>
             <button class="btn-teal" onclick="saveAsFile()">💾 Save JSON File</button>
@@ -77,6 +78,7 @@
         </div>
     </header>
 
+    <div id="adminPanel" class="card" hidden><h3>Admin Dashboard — Staff Accounts</h3><p style="color:#94a3b8;margin:8px 0">Create a staff login (email + temporary password). Maximum 9 active staff.</p><form id="staffForm"><input id="staffName" placeholder="Staff full name" required><input id="staffEmail" type="email" placeholder="Staff email" required><input id="staffPassword" type="password" minlength="12" placeholder="Temporary password (12+ characters)" required><button class="btn-green" type="submit">Add Staff</button></form><p id="adminError" role="alert"></p><div id="staffList"></div></div>
     <!-- GALLERY VIEW DASHBOARD -->
     <div id="galleryDashboard" class="card">
         <div class="card-title">
@@ -430,277 +432,86 @@
         addRow();
     }
 
-    // ============================================================
-    // DIRECT GOOGLE DRIVE API (GitHub Pages + Google OAuth)
-    // Create an OAuth 2.0 Web Client ID in Google Cloud Console.
-    // Add https://comamalaxdataencoder.github.io as an Authorized JS origin.
-    // WARNING: drive scope requests broad Drive access; use a trusted account.
-    // ============================================================
-    const GOOGLE_CLIENT_ID = "441936885844-ji8gr0g1cdhfrjs5c4a2lnppqddt0ior.apps.googleusercontent.com";
-    const MAIN_FOLDER_ID = "1LYFJISQJwdcdTO1_UQZQtCREs22tSgHH";
-    const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive";
-    let googleAccessToken = null;
-    let googleTokenClient = null;
-
-    function googleAuthorize() {
-        return new Promise((resolve, reject) => {
-            if (!window.google || !google.accounts || !google.accounts.oauth2) {
-                reject(new Error('Google Sign-In is still loading. Refresh the page and try again.'));
-                return;
-            }
-            if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.includes('PASTE_YOUR_')) {
-                reject(new Error('Set GOOGLE_CLIENT_ID in the HTML first.'));
-                return;
-            }
-            let settled = false;
-            const timer = setTimeout(() => {
-                if (!settled) { settled = true; reject(new Error('Google authorization timed out. Please try again.')); }
-            }, 120000);
-            const finish = (err, token) => {
-                if (settled) return;
-                settled = true;
-                clearTimeout(timer);
-                if (err) reject(err); else resolve(token);
-            };
-            googleTokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: GOOGLE_CLIENT_ID,
-                scope: DRIVE_SCOPE,
-                callback: (response) => {
-                    if (response.error || !response.access_token) {
-                        finish(new Error(response.error_description || response.error || 'Google authorization failed.'));
-                        return;
-                    }
-                    googleAccessToken = response.access_token;
-                    finish(null, googleAccessToken);
-                },
-                error_callback: (err) => finish(new Error(err.message || err.type || 'Google sign-in was cancelled or blocked.'))
-            });
-            googleTokenClient.requestAccessToken({prompt: googleAccessToken ? '' : 'consent'});
-        });
+    // Authenticated backend. Never put Google refresh tokens or staff passwords in GitHub HTML.
+    const API_BASE = 'https://YOUR-BACKEND.example.com'; // CHANGE after backend deployment
+    const FIREBASE_CONFIG = null; // CHANGE to your Firebase Web App config object
+    let authUser = null;
+    let firebaseAuth = null;
+    let firebaseModules = null;
+    async function api(path, options = {}) {
+        if (!authUser) throw new Error('Please sign in.');
+        if (API_BASE.includes('YOUR-BACKEND')) throw new Error('Backend not configured yet. Follow SETUP.md.');
+        const token = await authUser.getIdToken();
+        const res = await fetch(API_BASE + path, {...options, headers: {'Authorization': 'Bearer ' + token, 'Content-Type':'application/json', ...(options.headers || {})}});
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Server error (' + res.status + ')');
+        return data;
     }
-
-    async function driveRequest(url, options = {}) {
-        const response = await fetch(url, {
-            ...options,
-            headers: {
-                Authorization: 'Bearer ' + googleAccessToken,
-                ...(options.headers || {})
-            }
-        });
-        const raw = await response.text();
-        let result;
-        try { result = raw ? JSON.parse(raw) : {}; }
-        catch (_) { result = {message: raw}; }
-        if (!response.ok) {
-            const message = result.error?.message || result.message || response.statusText;
-            throw new Error('Google Drive API (' + response.status + '): ' + message);
-        }
-        return result;
-    }
-
-    async function listFolderFiles(folderId, extraQuery) {
-        const all = [];
-        let pageToken = '';
-        do {
-            const q = "'" + folderId + "' in parents and trashed = false" +
-                (extraQuery ? ' and ' + extraQuery : '');
-            const params = new URLSearchParams({
-                q, fields: 'nextPageToken,files(id,name,mimeType,webViewLink)',
-                pageSize: '1000', supportsAllDrives: 'true', includeItemsFromAllDrives: 'true'
-            });
-            if (pageToken) params.set('pageToken', pageToken);
-            const result = await driveRequest('https://www.googleapis.com/drive/v3/files?' + params);
-            all.push(...(result.files || []));
-            pageToken = result.nextPageToken || '';
-        } while (pageToken);
-        return all;
-    }
-
-    async function findGoogleShopFolder(shop) {
-        const normalized = String(shop).toLowerCase().replace(/[^a-z0-9]/g, '');
-        const prefixes = ['watsons', 'landers', 'landmark', 'mitsukoshi', 'metrogaisano', 'robinsons'];
-        const prefix = prefixes.find(p => normalized.includes(p));
-        if (!prefix) throw new Error('Unrecognized shop: ' + shop);
-        const folders = await listFolderFiles(MAIN_FOLDER_ID, "mimeType = 'application/vnd.google-apps.folder'");
-        const found = folders.find(f => f.name.toLowerCase().replace(/[^a-z0-9]/g, '').startsWith(prefix));
-        if (!found) throw new Error('Shop folder not found in DR OFFLINE: ' + shop);
-        return found;
-    }
-
-
-    // Drive is authoritative; explicit sync avoids deleting records during temporary API errors.
     async function syncGoogleDriveHistory() {
-        const button = document.getElementById('syncDriveBtn');
-        const original = button.textContent;
-        button.disabled = true;
-        button.textContent = '⏳ Syncing...';
-        try {
-            await googleAuthorize();
-            const snapshots = {};
-            const counts = {};
-            // Fetch all folders successfully before changing local data.
-            for (const shop of Object.keys(shopBranches)) {
-                const folder = await findGoogleShopFolder(shop);
-                const files = (await listFolderFiles(folder.id)).filter(f =>
-                    f.mimeType !== 'application/vnd.google-apps.folder' &&
-                    /^DR_.+\.json$/i.test(f.name));
-                snapshots[shop] = files;
-                counts[shop] = files.length;
-            }
-            const history = JSON.parse(localStorage.getItem('ijin_dr_history') || '[]');
-            if (!Array.isArray(history)) throw new Error('Invalid local history.');
-            const kept = [], removed = [];
-            for (const entry of history) {
-                const data = entry.data || {};
-                const shop = data.shopSelect || entry.destination;
-                if (!Object.prototype.hasOwnProperty.call(snapshots, shop)) {
-                    kept.push(entry);
-                    continue;
-                }
-                const id = String(entry.driveFileId || '');
-                const drNo = String(data.drNo || '').trim();
-                const filename = drNo ? 'DR_' + drNo.replace(/[\\/:*?"<>|]/g, '_') + '.json' : '';
-                const exists = id ? snapshots[shop].some(f => f.id === id) :
-                    (filename && snapshots[shop].some(f => f.name === filename));
-                (exists ? kept : removed).push(entry);
-            }
-            if (removed.length) {
-                if (!confirm('Full sync found ' + removed.length +
-                    ' local records missing from Google Drive.\n\n' +
-                    'A JSON backup of ALL local history will be downloaded before removing them. Continue?')) {
-                    driveCounts = counts;
-                    renderShopGallery();
-                    return;
-                }
-                const backup = new Blob([JSON.stringify({
-                    exportedAt: new Date().toISOString(), records: history
-                }, null, 2)], {type:'application/json'});
-                const url = URL.createObjectURL(backup);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'IJIN_DR_HISTORY_BACKUP_' +
-                    new Date().toISOString().replace(/[:.]/g, '-') + '.json';
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                setTimeout(() => URL.revokeObjectURL(url), 30000);
-                localStorage.setItem('ijin_dr_history', JSON.stringify(kept));
-            }
-            driveCounts = counts;
-            renderShopGallery();
-            alert('SYNC COMPLETE!\nDrive JSON files: ' +
-                Object.values(counts).reduce((a,b) => a+b, 0) +
-                '\nLocal records removed: ' + removed.length);
-        } catch (error) {
-            console.error('Sync error:', error);
-            alert('SYNC FAILED. No local records deleted.\n' + error.message);
-        } finally {
-            button.disabled = false;
-            button.textContent = original;
-        }
+        const btn = document.getElementById('syncDriveBtn'); btn.disabled = true;
+        try { const result = await api('/api/counts'); driveCounts = result.counts; renderShopGallery(); alert('Drive counts updated successfully.'); }
+        catch(e) {alert('Sync failed: ' + e.message)} finally {btn.disabled=false}
     }
-
     async function openGoogleShopFolder(shopName) {
-        // Open immediately inside the user's click event, before any await.
         const popup = window.open('about:blank', '_blank');
-        if (!popup) {
-            alert('New tab blocked. Allow pop-ups and redirects for this DR System website, then click Open again.');
-            return;
-        }
-        try {
-            popup.document.title = 'Opening Google Drive';
-            popup.document.body.textContent = 'Connecting to Google Drive. Please wait...';
-            await googleAuthorize();
-            const folder = await findGoogleShopFolder(shopName);
-            const url = 'https://drive.google.com/drive/folders/' + encodeURIComponent(folder.id);
-            if (!popup.closed) popup.location.href = url;
-        } catch (error) {
-            console.error('Google Drive folder error:', error);
-            if (!popup.closed) popup.close();
-            alert('Cannot open Google Drive folder: ' + error.message);
-        }
+        if (!popup) {alert('Allow pop-ups for this website.'); return;}
+        try { const result = await api('/api/folder?shop=' + encodeURIComponent(shopName)); popup.location.href = result.url; }
+        catch(e) {popup.close();alert('Unable to open folder: ' + e.message)}
     }
-
-    async function uploadGoogleDriveJSON(folderId, filename, content) {
-        const escaped = filename.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        const existing = await listFolderFiles(folderId, "name = '" + escaped + "'");
-        const blob = new Blob([content], {type: 'application/json'});
-        let saved;
-        if (existing.length) {
-            saved = await driveRequest(
-                'https://www.googleapis.com/upload/drive/v3/files/' + encodeURIComponent(existing[0].id) + '?uploadType=media&fields=id,name,webViewLink&supportsAllDrives=true',
-                {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: blob}
-            );
-        } else {
-            const boundary = 'dr_' + Date.now();
-            const metadata = JSON.stringify({name: filename, parents: [folderId], mimeType: 'application/json'});
-            const body = new Blob([
-                '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n',
-                metadata,
-                '\r\n--' + boundary + '\r\nContent-Type: application/json\r\n\r\n',
-                blob,
-                '\r\n--' + boundary + '--'
-            ]);
-            saved = await driveRequest(
-                'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink&supportsAllDrives=true',
-                {method: 'POST', headers: {'Content-Type': 'multipart/related; boundary=' + boundary}, body}
-            );
-        }
-        if (!saved.id) throw new Error('Google Drive did not return a saved file ID.');
-        return saved;
-    }
-
     async function saveOnlyToGoogleDrive() {
-        const currentData = getFormData();
-        const shop = currentData.shopSelect;
-        const drNo = String(currentData.drNo || '').trim();
-        if (!shop) { alert('Please select a shop.'); return; }
-        if (!drNo) { alert('Please enter a DR Number.'); return; }
-        if (!currentData.items.some(i => String(i.Item_Code || i.Description || '').trim())) {
-            alert('Please enter at least one item.'); return;
+        const data = getFormData();
+        if (!data.shopSelect || !String(data.drNo).trim() || !data.items.some(i => String(i.Item_Code || i.Description || '').trim())) {
+            alert('Please select a shop, enter DR number and at least one item.'); return;
         }
-        const btn = document.querySelector('.btn-green');
-        const oldText = btn?.innerHTML;
-        if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Saving to Google Drive...'; }
+        const btn = document.querySelector('.btn-green'); btn.disabled=true;
         try {
-            // Request a fresh access token on each save (avoids expired-token errors).
-            await googleAuthorize();
-            const folder = await findGoogleShopFolder(shop);
-            const safeDR = drNo.replace(/[\\/:*?"<>|]/g, '_');
-            const filename = 'DR_' + safeDR + '.json';
-            const content = JSON.stringify({
-                shop, drNumber: drNo, savedAt: new Date().toISOString(), deliveryReceipt: currentData
-            }, null, 2);
-            const saved = await uploadGoogleDriveJSON(folder.id, filename, content);
+            const result = await api('/api/receipts', {method:'POST', body:JSON.stringify({deliveryReceipt:data})});
             const history = JSON.parse(localStorage.getItem('ijin_dr_history') || '[]');
-            history.unshift({savedAt: new Date().toISOString(), data: currentData, destination: shop, driveFileId: saved.id});
-            localStorage.setItem('ijin_dr_history', JSON.stringify(history.slice(0, 500)));
-            // Re-read the actual JSON files from Drive after a verified save.
-            // Updating an existing DR must NOT increase the count.
-            let countNotice = '';
-            try {
-                const files = await listFolderFiles(folder.id);
-                if (driveCounts == null) driveCounts = {};
-                driveCounts[shop] = files.filter(f =>
-                    f.mimeType !== 'application/vnd.google-apps.folder' &&
-                    /^DR_.+\.json$/i.test(f.name)
-                ).length;
-            } catch (countError) {
-                console.warn('Saved successfully, but Drive count refresh failed:', countError);
-                if (driveCounts == null) driveCounts = {};
-                delete driveCounts[shop];
-                countNotice = '\n\nDrive count could not be refreshed. Use Sync Drive & History to retry.';
-            }
-            renderShopGallery();
-            alert('SAVED TO GOOGLE DRIVE!\n\nShop: ' + folder.name + '\nFile: ' + filename + '\nGoogle Drive File ID: ' + saved.id + countNotice);
-        } catch (error) {
-            console.error('Google Drive save failed:', error);
-            alert('SAVE FAILED — No success confirmed.\n\n' + error.message);
-        } finally {
-            if (btn) { btn.disabled = false; btn.innerHTML = oldText; }
-        }
+            history.unshift({savedAt:new Date().toISOString(),data,destination:data.shopSelect,driveFileId:result.fileId});
+            localStorage.setItem('ijin_dr_history',JSON.stringify(history.slice(0,500)));
+            driveCounts = result.counts; renderShopGallery();
+            alert('Saved to company Google Drive!\nFile: ' + result.filename);
+        } catch(e) {alert('Save failed: ' + e.message)} finally {btn.disabled=false}
     }
-
+    async function logoutStaff() { if(firebaseAuth) await firebaseModules.signOut(firebaseAuth); }
+    function toggleAdmin() {const p=document.getElementById('adminPanel');p.hidden=!p.hidden;if(!p.hidden)loadStaff();}
+    async function loadStaff() {
+        try {const r=await api('/api/admin/staff');document.getElementById('staffList').innerHTML='';
+            for(const u of r.users) {const row=document.createElement('div');row.style.cssText='padding:10px;border-bottom:1px solid #334155';
+                const label=document.createElement('span');label.textContent=(u.name || '')+' — '+u.email+' — '+(u.disabled?'Disabled':'Active')+' ';
+                const btn=document.createElement('button');btn.className='btn-orange';btn.textContent=u.disabled?'Activate':'Deactivate';
+                btn.onclick=async()=>{try{await api('/api/admin/staff/'+encodeURIComponent(u.uid),{method:'PATCH',body:JSON.stringify({disabled:!u.disabled})});loadStaff()}catch(e){alert(e.message)}};
+                const reset=document.createElement('button');reset.className='btn-indigo';reset.textContent='Reset Password';reset.onclick=async()=>{
+                    const password=prompt('Enter NEW temporary password (12+ characters):');if(!password)return;
+                    try{await api('/api/admin/staff/'+encodeURIComponent(u.uid)+'/password',{method:'POST',body:JSON.stringify({password})});alert('Password updated. Share it securely.')}catch(e){alert(e.message)}
+                };
+                row.append(label,btn,reset);document.getElementById('staffList').append(row);
+            }
+        }catch(e){document.getElementById('adminError').textContent=e.message}
+    }
+    document.getElementById('staffForm').addEventListener('submit',async(e)=>{e.preventDefault();
+        const error=document.getElementById('adminError');error.textContent='';
+        try{await api('/api/admin/staff',{method:'POST',body:JSON.stringify({name:document.getElementById('staffName').value,email:document.getElementById('staffEmail').value,password:document.getElementById('staffPassword').value})});e.target.reset();await loadStaff()}
+        catch(err){error.textContent=err.message}
+    });
+    async function startAuth() {
+        if(!FIREBASE_CONFIG || API_BASE.includes('YOUR-BACKEND')) {document.getElementById('authError').textContent='Setup required: configure Firebase and backend URL in index.html. See SETUP.md.';return;}
+        try {
+            const app=await import('https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js');
+            const auth=await import('https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js');
+            firebaseModules=auth;firebaseAuth=auth.getAuth(app.initializeApp(FIREBASE_CONFIG));
+            document.getElementById('loginForm').addEventListener('submit',async e=>{e.preventDefault();
+                try{await auth.signInWithEmailAndPassword(firebaseAuth,document.getElementById('loginEmail').value,document.getElementById('loginPassword').value)}
+                catch(err){document.getElementById('authError').textContent='Login failed. Check your email/password or contact Admin.'}
+            });
+            auth.onAuthStateChanged(firebaseAuth,async user=>{
+                authUser=user;document.getElementById('authOverlay').hidden=!(!user);
+                document.getElementById('adminPanel').hidden=true;document.getElementById('adminBtn').hidden=true;
+                if(user){try{const profile=await api('/api/me');document.getElementById('signedInAs').textContent=profile.name+' ('+profile.role+')';document.getElementById('adminBtn').hidden=profile.role!=='admin';await syncGoogleDriveHistory()}
+                    catch(e){document.getElementById('authError').textContent=e.message;document.getElementById('authOverlay').hidden=false}}
+            });
+        } catch(e){document.getElementById('authError').textContent='Unable to initialize sign-in: '+e.message}
+    }
     // --- SAVE A LOCAL JSON COPY ---
     function saveAsFile() {
         const data = getFormData();
@@ -787,6 +598,7 @@
 
     loadDraft();
     renderShopGallery();
+    startAuth();
 </script>
 
 </body>
