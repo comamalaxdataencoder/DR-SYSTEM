@@ -71,6 +71,7 @@
             <button class="btn-indigo" onclick="openHistoryModal()">📜 View History</button>
             <button class="btn-teal" onclick="saveAsFile()">💾 Save JSON File</button>
             <button class="btn-green" onclick="saveOnlyToGoogleDrive()">☁️ Save to Google Drive</button>
+            <button class="btn-indigo" id="syncDriveBtn" onclick="syncGoogleDriveHistory()">🔄 Sync Drive & History</button>
             <button class="btn-orange" onclick="exportToCSV()">📥 Export CSV (Manual)</button>
             <button class="btn-blue" onclick="printReceipt()">🖨️ Print / PDF</button>
         </div>
@@ -269,19 +270,22 @@
         textarea.style.height = textarea.scrollHeight + 'px';
     }
 
+    let driveCounts = null;
     function renderShopGallery() {
         let grid = document.getElementById('shopGalleryGrid');
         grid.innerHTML = '';
         let history = JSON.parse(localStorage.getItem('ijin_dr_history')) || [];
 
         Object.keys(shopBranches).forEach(shopName => {
-            let count = history.filter(item => item.data.shopSelect === shopName).length;
+            let count = history.filter(item => (item.data || {}).shopSelect === shopName).length;
+            const cloudCount = driveCounts && driveCounts[shopName];
+            const countLabel = cloudCount === undefined ? count + ' Local Records' : cloudCount + ' Drive Records';
             let card = document.createElement('div');
             card.className = 'shop-card';
             card.onclick = () => selectShopFromGallery(shopName);
             card.innerHTML = `
                 <div class="shop-card-header"><h3>${shopName}</h3></div>
-                <div class="shop-card-footer"><span>${count} Local Records</span><button type="button" class="shop-drive-link" title="Open this shop folder in Google Drive">📂 Open</button></div>
+                <div class="shop-card-footer"><span>${countLabel}</span><button type="button" class="shop-drive-link" title="Open this shop folder in Google Drive">📂 Open</button></div>
             `;
             card.querySelector('.shop-drive-link').addEventListener('click', (event) => {
                 event.stopPropagation();
@@ -526,6 +530,79 @@
         return found;
     }
 
+
+    // Drive is authoritative; explicit sync avoids deleting records during temporary API errors.
+    async function syncGoogleDriveHistory() {
+        const button = document.getElementById('syncDriveBtn');
+        const original = button.textContent;
+        button.disabled = true;
+        button.textContent = '⏳ Syncing...';
+        try {
+            await googleAuthorize();
+            const snapshots = {};
+            const counts = {};
+            // Fetch all folders successfully before changing local data.
+            for (const shop of Object.keys(shopBranches)) {
+                const folder = await findGoogleShopFolder(shop);
+                const files = (await listFolderFiles(folder.id)).filter(f =>
+                    f.mimeType !== 'application/vnd.google-apps.folder' &&
+                    /^DR_.+\.json$/i.test(f.name));
+                snapshots[shop] = files;
+                counts[shop] = files.length;
+            }
+            const history = JSON.parse(localStorage.getItem('ijin_dr_history') || '[]');
+            if (!Array.isArray(history)) throw new Error('Invalid local history.');
+            const kept = [], removed = [];
+            for (const entry of history) {
+                const data = entry.data || {};
+                const shop = data.shopSelect || entry.destination;
+                if (!Object.prototype.hasOwnProperty.call(snapshots, shop)) {
+                    kept.push(entry);
+                    continue;
+                }
+                const id = String(entry.driveFileId || '');
+                const drNo = String(data.drNo || '').trim();
+                const filename = drNo ? 'DR_' + drNo.replace(/[\\/:*?"<>|]/g, '_') + '.json' : '';
+                const exists = id ? snapshots[shop].some(f => f.id === id) :
+                    (filename && snapshots[shop].some(f => f.name === filename));
+                (exists ? kept : removed).push(entry);
+            }
+            if (removed.length) {
+                if (!confirm('Full sync found ' + removed.length +
+                    ' local records missing from Google Drive.\n\n' +
+                    'A JSON backup of ALL local history will be downloaded before removing them. Continue?')) {
+                    driveCounts = counts;
+                    renderShopGallery();
+                    return;
+                }
+                const backup = new Blob([JSON.stringify({
+                    exportedAt: new Date().toISOString(), records: history
+                }, null, 2)], {type:'application/json'});
+                const url = URL.createObjectURL(backup);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'IJIN_DR_HISTORY_BACKUP_' +
+                    new Date().toISOString().replace(/[:.]/g, '-') + '.json';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 30000);
+                localStorage.setItem('ijin_dr_history', JSON.stringify(kept));
+            }
+            driveCounts = counts;
+            renderShopGallery();
+            alert('SYNC COMPLETE!\nDrive JSON files: ' +
+                Object.values(counts).reduce((a,b) => a+b, 0) +
+                '\nLocal records removed: ' + removed.length);
+        } catch (error) {
+            console.error('Sync error:', error);
+            alert('SYNC FAILED. No local records deleted.\n' + error.message);
+        } finally {
+            button.disabled = false;
+            button.textContent = original;
+        }
+    }
+
     async function openGoogleShopFolder(shopName) {
         try {
             await googleAuthorize();
@@ -593,6 +670,7 @@
             const history = JSON.parse(localStorage.getItem('ijin_dr_history') || '[]');
             history.unshift({savedAt: new Date().toISOString(), data: currentData, destination: shop, driveFileId: saved.id});
             localStorage.setItem('ijin_dr_history', JSON.stringify(history.slice(0, 500)));
+            driveCounts = null;
             renderShopGallery();
             alert('SAVED TO GOOGLE DRIVE!\n\nShop: ' + folder.name + '\nFile: ' + filename + '\nGoogle Drive File ID: ' + saved.id);
         } catch (error) {
