@@ -1,4 +1,4 @@
-a<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -61,7 +61,7 @@ a<!DOCTYPE html>
 <body>
 
 <div id="authOverlay"><div class="auth-card"><h2 style="color:#38bdf8">I-JIN DR SYSTEM</h2><p style="margin:10px 0">Staff / Admin Sign In</p><form id="loginForm"><input id="loginEmail" type="email" placeholder="Work email" autocomplete="username" required><input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password" required><button type="submit" class="btn-blue">Sign In</button></form><p id="authError" role="alert" style="margin-top:12px"></p></div></div>
-<div class="container">
+<div class="container" id="appShell" hidden>
     <header>
         <div class="brand">
             <h1>I-JIN INTERNATIONAL</h1>
@@ -505,10 +505,10 @@ a<!DOCTYPE html>
                 catch(err){document.getElementById('authError').textContent='Login failed. Check your email/password or contact Admin.'}
             });
             auth.onAuthStateChanged(firebaseAuth,async user=>{
-                authUser=user;document.getElementById('authOverlay').hidden=!(!user);
+                authUser=user;document.getElementById('authOverlay').hidden=false;document.getElementById('appShell').hidden=true;document.getElementById('authError').textContent='';
                 document.getElementById('adminPanel').hidden=true;document.getElementById('adminBtn').hidden=true;
-                if(user){try{const profile=await api('/api/me');document.getElementById('signedInAs').textContent=profile.name+' ('+profile.role+')';document.getElementById('adminBtn').hidden=profile.role!=='admin';await syncGoogleDriveHistory()}
-                    catch(e){document.getElementById('authError').textContent=e.message;document.getElementById('authOverlay').hidden=false}}
+                if(user){try{const profile=await api('/api/me');document.getElementById('signedInAs').textContent=profile.name+' ('+profile.role+')';document.getElementById('adminBtn').hidden=profile.role!=='admin';document.getElementById('authOverlay').hidden=true;document.getElementById('appShell').hidden=false;await syncGoogleDriveHistory()}
+                    catch(e){document.getElementById('authError').textContent=e.message;document.getElementById('authOverlay').hidden=false;document.getElementById('appShell').hidden=true}}
             });
         } catch(e){document.getElementById('authError').textContent='Unable to initialize sign-in: '+e.message}
     }
