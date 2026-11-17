@@ -604,14 +604,22 @@
     }
 
     async function openGoogleShopFolder(shopName) {
+        // Open immediately inside the user's click event, before any await.
+        const popup = window.open('about:blank', '_blank', 'width=1150,height=760,resizable=yes,scrollbars=yes');
+        if (!popup) {
+            alert('Popup blocked. Please allow popups for this DR System website and try again.');
+            return;
+        }
         try {
+            popup.document.title = 'Opening Google Drive';
+            popup.document.body.textContent = 'Connecting to Google Drive. Please wait...';
             await googleAuthorize();
             const folder = await findGoogleShopFolder(shopName);
             const url = 'https://drive.google.com/drive/folders/' + encodeURIComponent(folder.id);
-            // Navigate in the same tab to avoid popup blockers.
-            window.location.assign(url);
+            if (!popup.closed) popup.location.replace(url);
         } catch (error) {
             console.error('Google Drive folder error:', error);
+            if (!popup.closed) popup.close();
             alert('Cannot open Google Drive folder: ' + error.message);
         }
     }
