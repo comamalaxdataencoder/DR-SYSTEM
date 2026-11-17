@@ -55,6 +55,17 @@
         }
         .shop-card-footer .shop-drive-link { background: none; border: 0; color: #38bdf8; font: inherit; font-weight: 600; cursor: pointer; padding: 0; }
     .shop-card-footer .shop-drive-link:hover { text-decoration: underline; }
+
+    [hidden] {display:none !important}
+    #authOverlay {min-height:calc(100vh - 40px);display:flex;align-items:center;justify-content:center}
+    .auth-card {width:min(430px,100%);padding:32px;border-radius:16px;background:#1e293b;border:1px solid #334155;box-shadow:0 15px 50px #0005}
+    .auth-card form {display:grid;gap:12px;margin-top:22px}.auth-card input {padding:13px;border:1px solid #475569;border-radius:8px;background:#0f172a;color:#fff;width:100%}.auth-card button{justify-content:center;padding:13px}
+    .admin-heading{display:flex;justify-content:space-between;align-items:center;gap:18px;margin:22px 0}.admin-heading h2{font-size:28px;color:#f8fafc}.admin-heading p{color:#94a3b8;margin-top:6px}.admin-heading .eyebrow{font-size:11px;letter-spacing:2px;color:#38bdf8;font-weight:700}
+    .admin-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:18px 0}.stat{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:8px}.stat span,.stat small,.muted{color:#94a3b8}.stat strong{font-size:30px;color:#38bdf8}
+    .admin-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 12px}.admin-tabs button{background:#1e293b;color:#cbd5e1;border:1px solid #334155}.admin-tabs button.selected{background:#0369a1;color:#fff}
+    .admin-content{min-height:220px;padding:22px}.admin-content h3{font-size:19px;margin-bottom:9px}.admin-content p{margin:8px 0 16px}.staff-form{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end;margin:22px 0}.staff-form label{display:grid;gap:7px;font-size:12px;color:#cbd5e1}.staff-form input{background:#0f172a;border:1px solid #475569;color:#fff;padding:11px;border-radius:7px;width:100%}.staff-form button{height:40px}.staff-list>div{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:13px 0;border-bottom:1px solid #334155}.staff-list>div span{flex:1;min-width:210px}.admin-shop-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:16px}.admin-shop-grid>div{background:#0f172a;border:1px solid #334155;border-radius:9px;padding:16px}.admin-shop-grid strong{display:block;font-size:23px;color:#38bdf8;margin-top:9px}
+    #adminError{color:#fca5a5}
+    @media(max-width:900px){.admin-stats{grid-template-columns:repeat(2,1fr)}.staff-form{grid-template-columns:1fr 1fr}}@media(max-width:600px){.admin-stats,.staff-form{grid-template-columns:1fr}.admin-heading{align-items:start;flex-direction:column}}
 </style>
     
 </head>
@@ -67,18 +78,27 @@
             <h1>I-JIN INTERNATIONAL</h1>
             <p>Delivery Receipt & Google Drive Sync System</p>
         </div>
-        <div class="actions"><span id="signedInAs" style="font-size:12px;color:#cbd5e1"></span><button id="adminBtn" class="btn-indigo" hidden onclick="toggleAdmin()">👤 Admin Dashboard</button><button class="btn-red" onclick="logoutStaff()">Log Out</button>
-            <button class="btn-red" onclick="clearDraft()">🗑️ New / Clear</button>
-            <button class="btn-indigo" onclick="openHistoryModal()">📜 View History</button>
-            <button class="btn-teal" onclick="saveAsFile()">💾 Save JSON File</button>
-            <button class="btn-green" onclick="saveOnlyToGoogleDrive()">☁️ Save to Google Drive</button>
-            <button class="btn-indigo" id="syncDriveBtn" onclick="syncGoogleDriveHistory()">🔄 Sync Drive & History</button>
-            <button class="btn-orange" onclick="exportToCSV()">📥 Export CSV (Manual)</button>
-            <button class="btn-blue" onclick="printReceipt()">🖨️ Print / PDF</button>
+        <div class="actions"><span id="signedInAs" style="font-size:12px;color:#cbd5e1"></span><button id="adminBtn" class="btn-indigo" hidden onclick="showAdminWindow()">🛡️ Admin Dashboard</button><button id="encodingBtn" class="btn-blue" hidden onclick="showEncodingWindow()">📋 DR Encoding</button><button class="btn-red" onclick="logoutStaff()">Log Out</button>
+            <button class="dr-action btn-red" onclick="clearDraft()">🗑️ New / Clear</button>
+            <button class="dr-action btn-indigo" onclick="openHistoryModal()">📜 View History</button>
+            <button class="dr-action btn-teal" onclick="saveAsFile()">💾 Save JSON File</button>
+            <button class="dr-action btn-green" onclick="saveOnlyToGoogleDrive()">☁️ Save to Google Drive</button>
+            <button class="dr-action btn-indigo" id="syncDriveBtn" onclick="syncGoogleDriveHistory()">🔄 Sync Drive & History</button>
+            <button class="dr-action btn-orange" onclick="exportToCSV()">📥 Export CSV (Manual)</button>
+            <button class="dr-action btn-blue" onclick="printReceipt()">🖨️ Print / PDF</button>
         </div>
     </header>
 
-    <div id="adminPanel" class="card" hidden><h3>Admin Dashboard — Staff Accounts</h3><p style="color:#94a3b8;margin:8px 0">Create a staff login (email + temporary password). Maximum 9 active staff.</p><form id="staffForm"><input id="staffName" placeholder="Staff full name" required><input id="staffEmail" type="email" placeholder="Staff email" required><input id="staffPassword" type="password" minlength="12" placeholder="Temporary password (12+ characters)" required><button class="btn-green" type="submit">Add Staff</button></form><p id="adminError" role="alert"></p><div id="staffList"></div></div>
+    <section id="adminWindow" hidden aria-label="Administrator dashboard">
+      <div class="admin-heading"><div><p class="eyebrow">ADMINISTRATOR CONTROL CENTER</p><h2>Admin Dashboard</h2><p>Manage authorized users and monitor Delivery Receipt activity.</p></div><button class="btn-blue" onclick="showEncodingWindow()">Open DR Encoding →</button></div>
+      <div class="admin-stats"><div class="stat"><span>Account capacity</span><strong>10</strong><small>1 Admin + 9 Staff</small></div><div class="stat"><span>Active staff</span><strong id="activeStaffCount">—</strong><small>Maximum 9</small></div><div class="stat"><span>DR files in Drive</span><strong id="totalDrCount">—</strong><small>From synced shop folders</small></div><div class="stat"><span>Recent activity</span><strong id="activityCount">—</strong><small>Latest recorded events</small></div></div>
+      <div class="admin-tabs"><button id="tabStaff" class="selected" onclick="showAdminTab('staff')">👥 Staff Management</button><button id="tabRecords" onclick="showAdminTab('records')">📁 DR Records</button><button id="tabActivity" onclick="showAdminTab('activity')">🕒 Activity Logs</button><button id="tabSettings" onclick="showAdminTab('settings')">⚙️ Settings</button></div>
+      <div id="adminStaff" class="card admin-content"><h3>Staff Accounts</h3><p class="muted">Create and manage up to 9 active staff accounts. Share temporary passwords privately.</p><form id="staffForm" class="staff-form"><label>Full name<input id="staffName" placeholder="Staff full name" required></label><label>Work email<input id="staffEmail" type="email" placeholder="staff@company.com" required></label><label>Temporary password<input id="staffPassword" type="password" minlength="12" placeholder="At least 12 characters" required></label><button class="btn-green" type="submit">+ Add Staff</button></form><p id="adminError" role="alert"></p><div id="staffList" class="staff-list"></div></div>
+      <div id="adminRecords" class="card admin-content" hidden><h3>DR Records by Shop</h3><p class="muted">Counts reflect Google Drive after successful synchronization.</p><button class="btn-blue" onclick="adminRefreshCounts()">🔄 Refresh Counts</button><div id="adminShopCounts" class="admin-shop-grid"></div></div>
+      <div id="adminActivity" class="card admin-content" hidden><h3>Recent Activity</h3><p class="muted">Server-recorded DR creation and updates.</p><button class="btn-blue" onclick="loadActivity()">🔄 Refresh Activity</button><div id="activityList" class="staff-list"></div></div>
+      <div id="adminSettings" class="card admin-content" hidden><h3>System Settings</h3><p>Company Drive: managed through the secure backend. No Google passwords or refresh tokens are stored in this website.</p><p class="muted">Backend and Firebase configuration must be completed before accounts or Drive features work.</p><p>Staff capacity: 9 active staff. Administrator: 1.</p></div>
+    </section>
+    <div id="encodingWindow" hidden>
     <!-- GALLERY VIEW DASHBOARD -->
     <div id="galleryDashboard" class="card">
         <div class="card-title">
@@ -218,6 +238,7 @@
         </div>
         <button class="btn-add" onclick="addRow()">+ Add Item</button>
     </div>
+    </div><!-- /encodingWindow -->
 </div>
 
 <script>
@@ -474,9 +495,45 @@
         } catch(e) {alert('Save failed: ' + e.message)} finally {btn.disabled=false}
     }
     async function logoutStaff() { if(firebaseAuth) await firebaseModules.signOut(firebaseAuth); }
-    function toggleAdmin() {const p=document.getElementById('adminPanel');p.hidden=!p.hidden;if(!p.hidden)loadStaff();}
+    let userRole = null;
+    function showAdminWindow() {
+        if (userRole !== 'admin') return;
+        document.getElementById('adminWindow').hidden = false;
+        document.getElementById('encodingWindow').hidden = true;
+        document.querySelectorAll('.dr-action').forEach(b => b.hidden = true);
+        document.getElementById('adminBtn').hidden = true;
+        document.getElementById('encodingBtn').hidden = false;
+        showAdminTab('staff');loadStaff();adminRefreshCounts();loadActivity();
+    }
+    function showEncodingWindow() {
+        document.getElementById('adminWindow').hidden = true;
+        document.getElementById('encodingWindow').hidden = false;
+        document.querySelectorAll('.dr-action').forEach(b => b.hidden = false);
+        document.getElementById('adminBtn').hidden = userRole !== 'admin';
+        document.getElementById('encodingBtn').hidden = true;
+    }
+    function showAdminTab(tab) {
+        for (const key of ['staff','records','activity','settings']) {
+            document.getElementById('admin'+key[0].toUpperCase()+key.slice(1)).hidden = key !== tab;
+            document.getElementById('tab'+key[0].toUpperCase()+key.slice(1)).classList.toggle('selected',key===tab);
+        }
+    }
+    async function adminRefreshCounts() {
+        try {const r=await api('/api/counts');driveCounts=r.counts;renderShopGallery();
+            document.getElementById('totalDrCount').textContent=Object.values(r.counts).reduce((a,b)=>a+Number(b||0),0);
+            const grid=document.getElementById('adminShopCounts');grid.replaceChildren();
+            for(const [shop,count] of Object.entries(r.counts)){const div=document.createElement('div');const label=document.createElement('span');label.textContent=shop;const num=document.createElement('strong');num.textContent=count+' records';div.append(label,num);grid.append(div)}
+        }catch(e){document.getElementById('adminShopCounts').textContent='Unable to load counts: '+e.message}
+    }
+    async function loadActivity() {
+        const target=document.getElementById('activityList');
+        try {const r=await api('/api/admin/activity');target.replaceChildren();document.getElementById('activityCount').textContent=r.events.length;
+            if(!r.events.length)target.textContent='No recorded activity yet.';
+            for(const event of r.events){const div=document.createElement('div');const line=document.createElement('span');line.textContent=(event.actorName||'Staff')+' • '+(event.action||'action')+' • '+(event.drNumber||'')+' • '+(event.shop||'');const time=document.createElement('small');time.textContent=event.at?new Date(event.at).toLocaleString():'';div.append(line,time);target.append(div)}
+        }catch(e){target.textContent='Unable to load activity: '+e.message}
+    }
     async function loadStaff() {
-        try {const r=await api('/api/admin/staff');document.getElementById('staffList').innerHTML='';
+        try {const r=await api('/api/admin/staff');document.getElementById('staffList').innerHTML='';document.getElementById('activeStaffCount').textContent=r.users.filter(u=>u.role==='staff'&&!u.disabled).length;
             for(const u of r.users) {const row=document.createElement('div');row.style.cssText='padding:10px;border-bottom:1px solid #334155';
                 const label=document.createElement('span');label.textContent=(u.name || '')+' — '+u.email+' — '+(u.disabled?'Disabled':'Active')+' ';
                 const btn=document.createElement('button');btn.className='btn-orange';btn.textContent=u.disabled?'Activate':'Deactivate';
@@ -506,8 +563,8 @@
             });
             auth.onAuthStateChanged(firebaseAuth,async user=>{
                 authUser=user;document.getElementById('authOverlay').hidden=false;document.getElementById('appShell').hidden=true;document.getElementById('authError').textContent='';
-                document.getElementById('adminPanel').hidden=true;document.getElementById('adminBtn').hidden=true;
-                if(user){try{const profile=await api('/api/me');document.getElementById('signedInAs').textContent=profile.name+' ('+profile.role+')';document.getElementById('adminBtn').hidden=profile.role!=='admin';document.getElementById('authOverlay').hidden=true;document.getElementById('appShell').hidden=false;await syncGoogleDriveHistory()}
+                document.getElementById('adminWindow').hidden=true;document.getElementById('encodingWindow').hidden=true;document.getElementById('adminBtn').hidden=true;document.getElementById('encodingBtn').hidden=true;userRole=null;
+                if(user){try{const profile=await api('/api/me');document.getElementById('signedInAs').textContent=profile.name+' ('+profile.role+')';userRole=profile.role;document.getElementById('authOverlay').hidden=true;document.getElementById('appShell').hidden=false;if(profile.role==='admin')showAdminWindow();else showEncodingWindow();if(profile.role!=='admin')await syncGoogleDriveHistory()}
                     catch(e){document.getElementById('authError').textContent=e.message;document.getElementById('authOverlay').hidden=false;document.getElementById('appShell').hidden=true}}
             });
         } catch(e){document.getElementById('authError').textContent='Unable to initialize sign-in: '+e.message}
