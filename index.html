@@ -273,12 +273,9 @@
     function renderShopGallery() {
         let grid = document.getElementById('shopGalleryGrid');
         grid.innerHTML = '';
-        let history = JSON.parse(localStorage.getItem('ijin_dr_history')) || [];
-
         Object.keys(shopBranches).forEach(shopName => {
-            let count = history.filter(item => (item.data || {}).shopSelect === shopName).length;
             const cloudCount = driveCounts == null ? undefined : driveCounts[shopName];
-            const countLabel = Number.isFinite(cloudCount) ? cloudCount + ' Drive Records' : count + ' Local Records (not synced)';
+            const countLabel = Number.isFinite(cloudCount) ? cloudCount + ' Drive Records' : '⏳ Drive count unavailable';
             let card = document.createElement('div');
             card.className = 'shop-card';
             card.onclick = () => selectShopFromGallery(shopName);
@@ -499,8 +496,13 @@
             const history = JSON.parse(localStorage.getItem('ijin_dr_history') || '[]');
             history.unshift({savedAt: new Date().toISOString(), data, destination: data.shopSelect, driveFileId: saved.fileId});
             localStorage.setItem('ijin_dr_history', JSON.stringify(history.slice(0, 500)));
-            await refreshDriveCounts().catch(err => console.warn('Count refresh failed:', err));
-            alert('SAVED TO GOOGLE DRIVE!\n\nShop: ' + saved.shop + '\nFile: ' + saved.file + '\nFile ID: ' + saved.fileId);
+            let countNotice = '';
+            try { await refreshDriveCounts(); }
+            catch (countErr) {
+                console.error('Count refresh failed after successful save:', countErr);
+                countNotice = '\n\nDrive count could not refresh: ' + countErr.message;
+            }
+            alert('SAVED TO GOOGLE DRIVE!\n\nShop: ' + saved.shop + '\nFile: ' + saved.file + '\nFile ID: ' + saved.fileId + countNotice);
         } catch (err) {
             alert('SAVE FAILED. No successful save confirmed.\n\n' + err.message);
         } finally {
