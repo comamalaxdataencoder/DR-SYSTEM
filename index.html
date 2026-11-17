@@ -43,6 +43,14 @@
         td textarea.item-desc { width: 100%; background: transparent; border: 1px solid transparent; color: inherit; font-size: 11px; text-align: left; resize: none; overflow: hidden; min-height: 24px; line-height: 1.3; }
         .btn-add { margin-top: 8px; background-color: #334155; color: white; padding: 6px 12px; font-size: 12px; cursor: pointer; border: none; border-radius: 4px; }
         .btn-del { background-color: #b91c1c; color: white; padding: 2px 6px; font-size: 10px; cursor: pointer; border: none; border-radius: 4px; }
+        button:disabled { opacity: .65; cursor: wait; }
+        @media print {
+            body { background: #fff; color: #000; padding: 0; }
+            .actions, #galleryDashboard, .btn-add, .btn-del { display: none !important; }
+            .card, header { background: #fff; color: #000; border: 1px solid #999; box-shadow: none; }
+            .brand h1, .brand p, .card-title, .field-table td.field-name { color: #000; }
+            input, select, textarea { color: #000 !important; }
+        }
     </style>
 </head>
 <body>
@@ -412,40 +420,147 @@
         addRow();
     }
 
-    // --- SAVE ONLY TO GOOGLE DRIVE (WALANG AUTO-DOWNLOAD SA PC) ---
-    async function saveOnlyToGoogleDrive() {
-        const scriptUrl = 'ILAGAY_MO_DITO_ANG_BAGONG_APPS_SCRIPT_URL'; // I-paste dito ang iyong Google Apps Script Web App URL
+    // ============================================================
+    // GOOGLE DRIVE SAVE SETTINGS
+    // Paste your deployed Google Apps Script Web App URL below.
+    // The URL must end in /exec.
+    // ============================================================
+    const GOOGLE_APPS_SCRIPT_URL = "PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
 
-        let currentData = getFormData();
-        
-        let payloadData = {
-            shop: currentData.shopSelect,
-            drNo: currentData.drNo,
-            data: currentData.items.map(item => ({
-                "Deliver_To": currentData.deliverTo,
-                "Item_Code": item.Item_Code,
-                "Description": item.Description,
-                "Qty": item.Qty,
-                "Final_Amount": item.Final_Amount
-            }))
+    // --- SAVE COMPLETE DR TO THE SELECTED SHOP FOLDER ---
+    async function saveOnlyToGoogleDrive() {
+        const currentData = getFormData();
+        const shop = currentData.shopSelect;
+        const drNo = String(currentData.drNo || '').trim();
+
+        if (!GOOGLE_APPS_SCRIPT_URL || GOOGLE_APPS_SCRIPT_URL.includes('PASTE_YOUR_')) {
+            alert('Please add your deployed Google Apps Script Web App URL in GOOGLE_APPS_SCRIPT_URL first.');
+            return;
+        }
+        if (!shop) {
+            alert('Please select a shop first.');
+            document.getElementById('shopSelect').focus();
+            return;
+        }
+        if (!drNo) {
+            alert('Please enter the DR Number first.');
+            document.getElementById('drNo').focus();
+            return;
+        }
+        if (!currentData.items.length) {
+            alert('Please add at least one item before saving.');
+            return;
+        }
+
+        const payloadData = {
+            shop: shop,
+            drNo: drNo,
+            data: currentData
         };
 
+        const saveButton = document.querySelector('.btn-green');
+        const originalButtonText = saveButton ? saveButton.innerHTML : '';
+        if (saveButton) {
+            saveButton.disabled = true;
+            saveButton.innerHTML = '⏳ Sending...';
+        }
+
         try {
-            let response = await fetch(scriptUrl, {
+            // Apps Script Web Apps may not expose their response to browser fetch
+            // because of cross-origin restrictions. no-cors sends the request,
+            // but the browser cannot confirm whether Drive finished writing it.
+            await fetch(GOOGLE_APPS_SCRIPT_URL, {
                 method: 'POST',
+                mode: 'no-cors',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify(payloadData)
             });
 
-            if (response.ok) {
-                alert('Matagumpay na na-save ang file direkta sa Google Drive folder!');
-            } else {
-                alert('Nagka-problema sa pag-save sa Google Drive.');
-            }
+            // Keep a local history entry for the gallery counter.
+            let history = JSON.parse(localStorage.getItem('ijin_dr_history') || '[]');
+            history.unshift({
+                savedAt: new Date().toISOString(),
+                data: currentData,
+                destination: shop
+            });
+            localStorage.setItem('ijin_dr_history', JSON.stringify(history.slice(0, 500)));
+            renderShopGallery();
+
+            alert(
+                'Save request sent to Google Drive.\n\n' +
+                'Shop: ' + shop + '\n' +
+                'DR Number: ' + drNo + '\n\n' +
+                'Please open the selected shop folder in Google Drive to verify that the JSON file was created.'
+            );
         } catch (error) {
-            console.error(error);
-            alert('May aberya sa koneksyon patungo sa Google Drive.');
+            console.error('Google Drive save error:', error);
+            alert('Unable to send the save request. Please check your internet connection and Apps Script URL, then try again.');
+        } finally {
+            if (saveButton) {
+                saveButton.disabled = false;
+                saveButton.innerHTML = originalButtonText;
+            }
         }
+    }
+
+    // --- SAVE A LOCAL JSON COPY ---
+    function saveAsFile() {
+        const data = getFormData();
+        const drNo = String(data.drNo || 'Draft').replace(/[\\/:*?"<>|]/g, '_');
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'DR_' + drNo + '.json';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+    }
+
+    // --- CLEAR THE CURRENT FORM ---
+    function clearDraft() {
+        if (!confirm('Start a new DR? Make sure you have saved the current DR first.')) return;
+        localStorage.removeItem('ijin_dr_draft');
+        document.getElementById('approvedStatus').value = 'APPROVED FOR DELIVERY';
+        document.getElementById('mainStatus').value = 'DELIVERED';
+        document.getElementById('jenStatus').value = 'DONE OUTBOUND';
+        document.getElementById('sirStatus').value = 'PENDING';
+        document.getElementById('preparedBy').value = 'CHADY';
+        document.getElementById('checkBy').value = 'JEN';
+        document.getElementById('receivedBy').value = 'STORE PERSONNEL';
+        document.getElementById('deliveredBy').value = 'AARON';
+        ['deliveryDate','drNo','deliverySchedule','totalBoxes','storeCode','deliverTo'].forEach(id => {
+            document.getElementById(id).value = '';
+        });
+        document.getElementById('shopSelect').value = '';
+        document.getElementById('branchList').innerHTML = '';
+        document.getElementById('itemsBody').innerHTML = '';
+        addRow();
+        autoSaveDraft();
+    }
+
+    // --- VIEW LOCAL SAVE HISTORY ---
+    function openHistoryModal() {
+        const history = JSON.parse(localStorage.getItem('ijin_dr_history') || '[]');
+        if (!history.length) {
+            alert('No local save history yet.');
+            return;
+        }
+        const lines = history.slice(0, 30).map((entry, index) => {
+            const d = entry.data || {};
+            return (index + 1) + '. ' + (d.drNo || 'No DR number') +
+                ' | ' + (d.shopSelect || entry.destination || 'No shop') +
+                ' | ' + (d.deliverTo || 'No branch') +
+                ' | ' + (entry.savedAt ? new Date(entry.savedAt).toLocaleString() : '');
+        });
+        alert('LOCAL SAVE HISTORY (latest 30)\n\n' + lines.join('\n') +
+            '\n\nNote: This is browser history of submitted save requests, not a verified Google Drive file list.');
+    }
+
+    // --- PRINT / SAVE AS PDF ---
+    function printReceipt() {
+        window.print();
     }
 
     function exportToCSV() {
