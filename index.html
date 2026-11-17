@@ -52,6 +52,7 @@
             input, select, textarea { color: #000 !important; }
         }
     </style>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 
@@ -421,91 +422,163 @@
     }
 
     // ============================================================
-    // GOOGLE DRIVE SAVE SETTINGS
-    // Paste your deployed Google Apps Script Web App URL below.
-    // The URL must end in /exec.
+    // DIRECT GOOGLE DRIVE API (GitHub Pages + Google OAuth)
+    // Create an OAuth 2.0 Web Client ID in Google Cloud Console.
+    // Add https://comamalaxdataencoder.github.io as an Authorized JS origin.
+    // WARNING: drive scope requests broad Drive access; use a trusted account.
     // ============================================================
-    const GOOGLE_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx-3VrA4Oyi10_d2ec3OVNr4SHe6rEtN7NYAAL_cwhY3Bxui1NJ8pYCzdj0qK4HHPug/exec";
+    const GOOGLE_CLIENT_ID = "PASTE_YOUR_GOOGLE_OAUTH_CLIENT_ID_HERE";
+    const MAIN_FOLDER_ID = "1LYFJISQJwdcdTO1_UQZQtCREs22tSgHH";
+    const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive";
+    let googleAccessToken = null;
+    let googleTokenClient = null;
 
-    // --- SAVE COMPLETE DR TO THE SELECTED SHOP FOLDER ---
+    function googleAuthorize() {
+        return new Promise((resolve, reject) => {
+            if (!window.google || !google.accounts || !google.accounts.oauth2) {
+                reject(new Error('Google Sign-In is still loading. Refresh the page and try again.'));
+                return;
+            }
+            if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.includes('PASTE_YOUR_')) {
+                reject(new Error('Set GOOGLE_CLIENT_ID in the HTML first.'));
+                return;
+            }
+            let settled = false;
+            const timer = setTimeout(() => {
+                if (!settled) { settled = true; reject(new Error('Google authorization timed out. Please try again.')); }
+            }, 120000);
+            const finish = (err, token) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                if (err) reject(err); else resolve(token);
+            };
+            googleTokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: GOOGLE_CLIENT_ID,
+                scope: DRIVE_SCOPE,
+                callback: (response) => {
+                    if (response.error || !response.access_token) {
+                        finish(new Error(response.error_description || response.error || 'Google authorization failed.'));
+                        return;
+                    }
+                    googleAccessToken = response.access_token;
+                    finish(null, googleAccessToken);
+                },
+                error_callback: (err) => finish(new Error(err.message || err.type || 'Google sign-in was cancelled or blocked.'))
+            });
+            googleTokenClient.requestAccessToken({prompt: googleAccessToken ? '' : 'consent'});
+        });
+    }
+
+    async function driveRequest(url, options = {}) {
+        const response = await fetch(url, {
+            ...options,
+            headers: {
+                Authorization: 'Bearer ' + googleAccessToken,
+                ...(options.headers || {})
+            }
+        });
+        const raw = await response.text();
+        let result;
+        try { result = raw ? JSON.parse(raw) : {}; }
+        catch (_) { result = {message: raw}; }
+        if (!response.ok) {
+            const message = result.error?.message || result.message || response.statusText;
+            throw new Error('Google Drive API (' + response.status + '): ' + message);
+        }
+        return result;
+    }
+
+    async function listFolderFiles(folderId, extraQuery) {
+        const all = [];
+        let pageToken = '';
+        do {
+            const q = "'" + folderId + "' in parents and trashed = false" +
+                (extraQuery ? ' and ' + extraQuery : '');
+            const params = new URLSearchParams({
+                q, fields: 'nextPageToken,files(id,name,mimeType,webViewLink)',
+                pageSize: '1000', supportsAllDrives: 'true', includeItemsFromAllDrives: 'true'
+            });
+            if (pageToken) params.set('pageToken', pageToken);
+            const result = await driveRequest('https://www.googleapis.com/drive/v3/files?' + params);
+            all.push(...(result.files || []));
+            pageToken = result.nextPageToken || '';
+        } while (pageToken);
+        return all;
+    }
+
+    async function findGoogleShopFolder(shop) {
+        const normalized = String(shop).toLowerCase().replace(/[^a-z0-9]/g, '');
+        const prefixes = ['watsons', 'landers', 'landmark', 'mitsukoshi', 'metrogaisano', 'robinsons'];
+        const prefix = prefixes.find(p => normalized.includes(p));
+        if (!prefix) throw new Error('Unrecognized shop: ' + shop);
+        const folders = await listFolderFiles(MAIN_FOLDER_ID, "mimeType = 'application/vnd.google-apps.folder'");
+        const found = folders.find(f => f.name.toLowerCase().replace(/[^a-z0-9]/g, '').startsWith(prefix));
+        if (!found) throw new Error('Shop folder not found in DR OFFLINE: ' + shop);
+        return found;
+    }
+
+    async function uploadGoogleDriveJSON(folderId, filename, content) {
+        const escaped = filename.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const existing = await listFolderFiles(folderId, "name = '" + escaped + "'");
+        const blob = new Blob([content], {type: 'application/json'});
+        let saved;
+        if (existing.length) {
+            saved = await driveRequest(
+                'https://www.googleapis.com/upload/drive/v3/files/' + encodeURIComponent(existing[0].id) + '?uploadType=media&fields=id,name,webViewLink&supportsAllDrives=true',
+                {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: blob}
+            );
+        } else {
+            const boundary = 'dr_' + Date.now();
+            const metadata = JSON.stringify({name: filename, parents: [folderId], mimeType: 'application/json'});
+            const body = new Blob([
+                '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n',
+                metadata,
+                '\r\n--' + boundary + '\r\nContent-Type: application/json\r\n\r\n',
+                blob,
+                '\r\n--' + boundary + '--'
+            ]);
+            saved = await driveRequest(
+                'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink&supportsAllDrives=true',
+                {method: 'POST', headers: {'Content-Type': 'multipart/related; boundary=' + boundary}, body}
+            );
+        }
+        if (!saved.id) throw new Error('Google Drive did not return a saved file ID.');
+        return saved;
+    }
+
     async function saveOnlyToGoogleDrive() {
         const currentData = getFormData();
         const shop = currentData.shopSelect;
         const drNo = String(currentData.drNo || '').trim();
-
-        if (!GOOGLE_APPS_SCRIPT_URL || GOOGLE_APPS_SCRIPT_URL.includes('PASTE_YOUR_')) {
-            alert('Please add your deployed Google Apps Script Web App URL in GOOGLE_APPS_SCRIPT_URL first.');
-            return;
+        if (!shop) { alert('Please select a shop.'); return; }
+        if (!drNo) { alert('Please enter a DR Number.'); return; }
+        if (!currentData.items.some(i => String(i.Item_Code || i.Description || '').trim())) {
+            alert('Please enter at least one item.'); return;
         }
-        if (!shop) {
-            alert('Please select a shop first.');
-            document.getElementById('shopSelect').focus();
-            return;
-        }
-        if (!drNo) {
-            alert('Please enter the DR Number first.');
-            document.getElementById('drNo').focus();
-            return;
-        }
-        if (!currentData.items.length) {
-            alert('Please add at least one item before saving.');
-            return;
-        }
-
-        if (!GOOGLE_APPS_SCRIPT_URL.startsWith('https://script.google.com/macros/s/') || !GOOGLE_APPS_SCRIPT_URL.endsWith('/exec')) {
-            alert('Invalid Apps Script URL. Use the deployed Web App URL ending in /exec.');
-            return;
-        }
-
-        const payloadData = {
-            shop: shop,
-            drNo: drNo,
-            data: currentData
-        };
-
-        const saveButton = document.querySelector('.btn-green');
-        const originalButtonText = saveButton ? saveButton.innerHTML : '';
-        if (saveButton) {
-            saveButton.disabled = true;
-            saveButton.innerHTML = '⏳ Sending...';
-        }
-
+        const btn = document.querySelector('.btn-green');
+        const oldText = btn?.innerHTML;
+        if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Saving to Google Drive...'; }
         try {
-            // Apps Script Web Apps may not expose their response to browser fetch
-            // because of cross-origin restrictions. no-cors sends the request,
-            // but the browser cannot confirm whether Drive finished writing it.
-            await fetch(GOOGLE_APPS_SCRIPT_URL, {
-                method: 'POST',
-                mode: 'no-cors',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify(payloadData)
-            });
-
-            // Local history only; this does not confirm a successful Google Drive save.
-            let history = JSON.parse(localStorage.getItem('ijin_dr_history') || '[]');
-            history.unshift({
-                savedAt: new Date().toISOString(),
-                data: currentData,
-                destination: shop
-            });
+            // Request a fresh access token on each save (avoids expired-token errors).
+            await googleAuthorize();
+            const folder = await findGoogleShopFolder(shop);
+            const safeDR = drNo.replace(/[\\/:*?"<>|]/g, '_');
+            const filename = 'DR_' + safeDR + '.json';
+            const content = JSON.stringify({
+                shop, drNumber: drNo, savedAt: new Date().toISOString(), deliveryReceipt: currentData
+            }, null, 2);
+            const saved = await uploadGoogleDriveJSON(folder.id, filename, content);
+            const history = JSON.parse(localStorage.getItem('ijin_dr_history') || '[]');
+            history.unshift({savedAt: new Date().toISOString(), data: currentData, destination: shop, driveFileId: saved.id});
             localStorage.setItem('ijin_dr_history', JSON.stringify(history.slice(0, 500)));
             renderShopGallery();
-
-            alert(
-                'Save request sent to Google Drive.\n\n' +
-                'Shop: ' + shop + '\n' +
-                'DR Number: ' + drNo + '\n\n' +
-                'This is NOT confirmation that the file was saved.\n' +
-                'Check Apps Script > Executions after clicking Save, then check the shop folder.'
-            );
+            alert('SAVED TO GOOGLE DRIVE!\n\nShop: ' + folder.name + '\nFile: ' + filename + '\nGoogle Drive File ID: ' + saved.id);
         } catch (error) {
-            console.error('Google Drive save error:', error);
-            alert('Unable to send the save request. Please check your internet connection and Apps Script URL, then try again.');
+            console.error('Google Drive save failed:', error);
+            alert('SAVE FAILED — No success confirmed.\n\n' + error.message);
         } finally {
-            if (saveButton) {
-                saveButton.disabled = false;
-                saveButton.innerHTML = originalButtonText;
-            }
+            if (btn) { btn.disabled = false; btn.innerHTML = oldText; }
         }
     }
 
