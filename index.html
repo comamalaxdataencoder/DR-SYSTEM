@@ -278,7 +278,7 @@
 
         Object.keys(shopBranches).forEach(shopName => {
             let count = history.filter(item => (item.data || {}).shopSelect === shopName).length;
-            const cloudCount = driveCounts && driveCounts[shopName];
+            const cloudCount = driveCounts == null ? undefined : driveCounts[shopName];
             const countLabel = cloudCount === undefined ? count + ' Local Records' : cloudCount + ' Drive Records';
             let card = document.createElement('div');
             card.className = 'shop-card';
@@ -617,6 +617,15 @@
             const folder = await findGoogleShopFolder(shopName);
             const url = 'https://drive.google.com/drive/folders/' + encodeURIComponent(folder.id);
             if (!popup.closed) popup.location.href = url;
+            // Refresh the clicked shop count from actual Drive JSON files.
+            try {
+                const files = await listFolderFiles(folder.id);
+                if (driveCounts == null) driveCounts = {};
+                driveCounts[shopName] = files.filter(f => /^DR_.+\.json$/i.test(f.name)).length;
+                renderShopGallery();
+            } catch (countError) {
+                console.warn('Drive count refresh failed:', countError);
+            }
         } catch (error) {
             console.error('Google Drive folder error:', error);
             if (!popup.closed) popup.close();
