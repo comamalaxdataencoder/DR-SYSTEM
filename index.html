@@ -93,10 +93,10 @@
       <div class="admin-heading"><div><p class="eyebrow">ADMINISTRATOR CONTROL CENTER</p><h2>Admin Dashboard</h2><p>Manage authorized users and monitor Delivery Receipt activity.</p></div><button class="btn-blue" onclick="showEncodingWindow()">Open DR Encoding →</button></div>
       <div class="admin-stats"><div class="stat"><span>Account capacity</span><strong>10</strong><small>1 Admin + 9 Staff</small></div><div class="stat"><span>Active staff</span><strong id="activeStaffCount">—</strong><small>Maximum 9</small></div><div class="stat"><span>DR files in Drive</span><strong id="totalDrCount">—</strong><small>From synced shop folders</small></div><div class="stat"><span>Recent activity</span><strong id="activityCount">—</strong><small>Latest recorded events</small></div></div>
       <div class="admin-tabs"><button id="tabStaff" class="selected" onclick="showAdminTab('staff')">👥 Staff Management</button><button id="tabRecords" onclick="showAdminTab('records')">📁 DR Records</button><button id="tabActivity" onclick="showAdminTab('activity')">🕒 Activity Logs</button><button id="tabSettings" onclick="showAdminTab('settings')">⚙️ Settings</button></div>
-      <div id="adminStaff" class="card admin-content"><h3>Staff Accounts</h3><p class="muted">Create and manage up to 9 active staff accounts. Share temporary passwords privately.</p><form id="staffForm" class="staff-form"><label>Full name<input id="staffName" placeholder="Staff full name" required></label><label>Work email<input id="staffEmail" type="email" placeholder="staff@company.com" required></label><label>Temporary password<input id="staffPassword" type="password" minlength="12" placeholder="At least 12 characters" required></label><button class="btn-green" type="submit">+ Add Staff</button></form><p id="adminError" role="alert"></p><div id="staffList" class="staff-list"></div></div>
+      <div id="adminStaff" class="card admin-content"><h3>Staff Accounts</h3><p class="muted">Account verification is active. Staff account creation requires a secure backend; this form is disabled until connected.</p><form id="staffForm" class="staff-form"><label>Full name<input id="staffName" placeholder="Staff full name" required></label><label>Work email<input id="staffEmail" type="email" placeholder="staff@company.com" required></label><label>Temporary password<input id="staffPassword" type="password" minlength="12" placeholder="At least 12 characters" required></label><button class="btn-green" type="submit" disabled title="Requires secure backend">+ Add Staff (backend needed)</button></form><p id="adminError" role="alert"></p><div id="staffList" class="staff-list"></div></div>
       <div id="adminRecords" class="card admin-content" hidden><h3>DR Records by Shop</h3><p class="muted">Counts reflect Google Drive after successful synchronization.</p><button class="btn-blue" onclick="adminRefreshCounts()">🔄 Refresh Counts</button><div id="adminShopCounts" class="admin-shop-grid"></div></div>
       <div id="adminActivity" class="card admin-content" hidden><h3>Recent Activity</h3><p class="muted">Server-recorded DR creation and updates.</p><button class="btn-blue" onclick="loadActivity()">🔄 Refresh Activity</button><div id="activityList" class="staff-list"></div></div>
-      <div id="adminSettings" class="card admin-content" hidden><h3>System Settings</h3><p>Company Drive: managed through the secure backend. No Google passwords or refresh tokens are stored in this website.</p><p class="muted">Backend and Firebase configuration must be completed before accounts or Drive features work.</p><p>Staff capacity: 9 active staff. Administrator: 1.</p></div>
+      <div id="adminSettings" class="card admin-content" hidden><h3>System Settings</h3><p>Company Drive: managed through the secure backend. No Google passwords or refresh tokens are stored in this website.</p><p class="muted">Firebase login and user-role verification are connected. Staff management and Drive features require a separately deployed secure backend.</p><p>Staff capacity: 9 active staff. Administrator: 1.</p></div>
     </section>
     <div id="encodingWindow" hidden>
     <!-- GALLERY VIEW DASHBOARD -->
@@ -467,6 +467,8 @@
     let authUser = null;
     let firebaseAuth = null;
     let firebaseModules = null;
+    let firestoreDb = null;
+    let firestoreModules = null;
     async function api(path, options = {}) {
         if (!authUser) throw new Error('Please sign in.');
         if (API_BASE.includes('YOUR-BACKEND')) throw new Error('Backend not configured yet. Follow SETUP.md.');
@@ -511,7 +513,7 @@
         document.querySelectorAll('.dr-action').forEach(b => b.hidden = true);
         document.getElementById('adminBtn').hidden = true;
         document.getElementById('encodingBtn').hidden = false;
-        showAdminTab('staff');loadStaff();adminRefreshCounts();loadActivity();
+        showAdminTab('staff');loadStaff();
     }
     function showEncodingWindow() {
         document.getElementById('adminWindow').hidden = true;
@@ -541,18 +543,19 @@
         }catch(e){target.textContent='Unable to load activity: '+e.message}
     }
     async function loadStaff() {
-        try {const r=await api('/api/admin/staff');document.getElementById('staffList').innerHTML='';document.getElementById('activeStaffCount').textContent=r.users.filter(u=>u.role==='staff'&&!u.disabled).length;
-            for(const u of r.users) {const row=document.createElement('div');row.style.cssText='padding:10px;border-bottom:1px solid #334155';
-                const label=document.createElement('span');label.textContent=(u.name || '')+' — '+u.email+' — '+(u.disabled?'Disabled':'Active')+' ';
-                const btn=document.createElement('button');btn.className='btn-orange';btn.textContent=u.disabled?'Activate':'Deactivate';
-                btn.onclick=async()=>{try{await api('/api/admin/staff/'+encodeURIComponent(u.uid),{method:'PATCH',body:JSON.stringify({disabled:!u.disabled})});loadStaff()}catch(e){alert(e.message)}};
-                const reset=document.createElement('button');reset.className='btn-indigo';reset.textContent='Reset Password';reset.onclick=async()=>{
-                    const password=prompt('Enter NEW temporary password (12+ characters):');if(!password)return;
-                    try{await api('/api/admin/staff/'+encodeURIComponent(u.uid)+'/password',{method:'POST',body:JSON.stringify({password})});alert('Password updated. Share it securely.')}catch(e){alert(e.message)}
-                };
-                row.append(label,btn,reset);document.getElementById('staffList').append(row);
+        const target=document.getElementById('staffList');
+        const error=document.getElementById('adminError');
+        target.replaceChildren();error.textContent='';
+        document.getElementById('activeStaffCount').textContent='—';
+        try {
+            const snap=await firestoreModules.getDoc(firestoreModules.doc(firestoreDb,'users',authUser.uid));
+            if(snap.exists()) {
+                const p=snap.data();const row=document.createElement('div');
+                row.textContent=(p.displayName||authUser.email)+' — '+authUser.email+' — '+p.role+' (current account)';
+                target.append(row);
             }
-        }catch(e){document.getElementById('adminError').textContent=e.message}
+            error.textContent='Creating, listing, deactivating, and resetting staff accounts requires the secure backend. Firebase login and the current user profile are connected.';
+        } catch(e) {error.textContent='Unable to read account: '+e.message}
     }
     document.getElementById('staffForm').addEventListener('submit',async(e)=>{e.preventDefault();
         const error=document.getElementById('adminError');error.textContent='';
@@ -561,19 +564,26 @@
     });
     async function startAuth() {
         if (!FIREBASE_CONFIG) {document.getElementById('authError').textContent='Firebase configuration missing.';return;}
-        if (API_BASE.includes('YOUR-BACKEND')) {document.getElementById('authError').textContent='Firebase is configured. Secure backend URL is still required before login can access the Admin Dashboard. See SETUP.md.';return;}
         try {
             const app=await import('https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js');
             const auth=await import('https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js');
-            firebaseModules=auth;firebaseAuth=auth.getAuth(app.initializeApp(FIREBASE_CONFIG));
+            const firestore=await import('https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js');
+            firebaseModules=auth;firestoreModules=firestore;
+            const firebaseApp=app.initializeApp(FIREBASE_CONFIG);
+            firebaseAuth=auth.getAuth(firebaseApp);firestoreDb=firestore.getFirestore(firebaseApp);
             document.getElementById('loginForm').addEventListener('submit',async e=>{e.preventDefault();
                 try{await auth.signInWithEmailAndPassword(firebaseAuth,document.getElementById('loginEmail').value,document.getElementById('loginPassword').value)}
-                catch(err){document.getElementById('authError').textContent='Login failed. Check your email/password or contact Admin.'}
+                catch(err){document.getElementById('authError').textContent='Login failed: '+err.message+''}
             });
             auth.onAuthStateChanged(firebaseAuth,async user=>{
                 authUser=user;document.getElementById('authOverlay').hidden=false;document.getElementById('appShell').hidden=true;document.getElementById('authError').textContent='';
                 document.getElementById('adminWindow').hidden=true;document.getElementById('encodingWindow').hidden=true;document.getElementById('adminBtn').hidden=true;document.getElementById('encodingBtn').hidden=true;userRole=null;
-                if(user){try{const profile=await api('/api/me');document.getElementById('signedInAs').textContent=profile.name+' ('+profile.role+')';userRole=profile.role;document.getElementById('authOverlay').hidden=true;document.getElementById('appShell').hidden=false;if(profile.role==='admin')showAdminWindow();else showEncodingWindow();if(profile.role!=='admin')await syncGoogleDriveHistory()}
+                if(user){try{const snap=await firestoreModules.getDoc(firestoreModules.doc(firestoreDb,'users',user.uid));
+                    if(!snap.exists())throw new Error('Account has no Firestore user profile. Ask Admin to create users/'+user.uid);
+                    const profile=snap.data();
+                    if(profile.active!==true)throw new Error('Your account is not active. Contact Admin.');
+                    if(!['admin','staff'].includes(profile.role))throw new Error('Account role is not configured.');
+                    document.getElementById('signedInAs').textContent=(profile.displayName||user.email)+' ('+profile.role+')';userRole=profile.role;document.getElementById('authOverlay').hidden=true;document.getElementById('appShell').hidden=false;if(profile.role==='admin')showAdminWindow();else showEncodingWindow()}
                     catch(e){document.getElementById('authError').textContent=e.message;document.getElementById('authOverlay').hidden=false;document.getElementById('appShell').hidden=true}}
             });
         } catch(e){document.getElementById('authError').textContent='Unable to initialize sign-in: '+e.message}
