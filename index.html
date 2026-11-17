@@ -3,227 +3,478 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DR OFFLINE Encoding System</title>
+    <title>I-JIN International Inc. - Delivery Receipt System</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha384-VtK5m8Q0S3B3zHq3+7K5Z6w5L5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5" crossorigin="anonymous"></script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            background-color: #f9f9f9;
-            color: #333;
-        }
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            background: #fff;
-            padding: 20px;
-            border: 1px solid #ccc;
-        }
-        h1, h2 {
-            color: #2c3e50;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        input, select {
-            width: 100%;
-            padding: 8px;
-            box-sizing: border-box;
-            border: 1px solid #ccc;
-        }
-        .row-container {
-            display: flex;
-            gap: 15px;
-        }
-        .row-container .form-group {
-            flex: 1;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 15px;
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-        }
-        th {
-            background-color: #f2f2f2;
-        }
-        button {
-            padding: 8px 15px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        .btn-add {
-            background-color: #27ae60;
-            color: white;
-            border: none;
-        }
-        .btn-save {
-            background-color: #2980b9;
-            color: white;
-            border: none;
-            float: right;
-        }
-        .btn-delete {
-            background-color: #c0392b;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-        }
-        .clearfix::after {
-            content: "";
-            clear: both;
-            display: table;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background-color: #0f172a; color: #f8fafc; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        header { display: flex; justify-content: space-between; align-items: center; background-color: #1e293b; padding: 15px 20px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #334155; flex-wrap: wrap; gap: 10px; }
+        .brand h1 { font-size: 22px; color: #38bdf8; font-weight: 800; }
+        .brand p { font-size: 11px; color: #94a3b8; }
+        .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+        button, .file-upload-btn { padding: 8px 14px; border-radius: 6px; border: none; font-weight: 600; cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; gap: 5px; text-decoration: none; }
+        .btn-green { background-color: #047857; color: white; } 
+        .btn-indigo { background-color: #4338ca; color: white; }
+        .btn-red { background-color: #b91c1c; color: white; }
+        .btn-teal { background-color: #0f766e; color: white; }
+        .btn-orange { background-color: #b45309; color: white; }
+        .btn-blue { background-color: #0369a1; color: white; }
+        
+        .gallery-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; margin-bottom: 25px; }
+        .shop-card { background: linear-gradient(135deg, #fde68a 0%, #f59e0b 100%); border-radius: 12px; overflow: hidden; cursor: pointer; border: 1px solid #d97706; display: flex; flex-direction: column; justify-content: space-between; transition: transform 0.2s; }
+        .shop-card:hover { transform: translateY(-4px); }
+        .shop-card-header { padding: 25px 20px; text-align: center; background-color: rgba(255, 255, 255, 0.2); }
+        .shop-card-header h3 { color: #1e293b; font-size: 18px; font-weight: 800; text-transform: uppercase; }
+        .shop-card-footer { background-color: #1e293b; padding: 12px 15px; color: #38bdf8; font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; border-top: 1px solid #334155; }
+        
+        .card { background-color: #1e293b; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #334155; }
+        .card-title { font-size: 13px; text-transform: uppercase; color: #94a3b8; margin-bottom: 10px; display: flex; justify-content: space-between; }
+        .excel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .field-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .field-table th, .field-table td { padding: 6px 10px; border: 1px solid #334155; }
+        .field-table td.field-name { font-weight: 600; color: #cbd5e1; width: 35%; background-color: #1e293b; }
+        .field-table td input, .field-table td select { width: 100%; padding: 4px 8px; background-color: #0f172a; border: 1px solid #334155; border-radius: 4px; color: white; font-size: 12px; }
+        .table-responsive { overflow-x: auto; margin-top: 10px; }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        th { background-color: #0f172a; color: #cbd5e1; padding: 6px; border: 1px solid #334155; text-align: center; }
+        td { padding: 4px 6px; border: 1px solid #334155; text-align: center; vertical-align: middle; }
+        td input { width: 100%; background: transparent; border: 1px solid transparent; color: inherit; font-size: 11px; text-align: center; }
+        td textarea.item-desc { width: 100%; background: transparent; border: 1px solid transparent; color: inherit; font-size: 11px; text-align: left; resize: none; overflow: hidden; min-height: 24px; line-height: 1.3; }
+        .btn-add { margin-top: 8px; background-color: #334155; color: white; padding: 6px 12px; font-size: 12px; cursor: pointer; border: none; border-radius: 4px; }
+        .btn-del { background-color: #b91c1c; color: white; padding: 2px 6px; font-size: 10px; cursor: pointer; border: none; border-radius: 4px; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Delivery Receipt (DR) Encoding System</h1>
-        
-        <div class="row-container">
-            <div class="form-group">
-                <label for="drNoInput">DR Number:</label>
-                <input type="text" id="drNoInput" placeholder="Ilagay ang DR #">
-            </div>
-            <div class="form-group">
-                <label for="shopSelect">Piliin ang Shop / Store:</label>
-                <select id="shopSelect">
-                    <option value="Watsons">Watsons</option>
-                    <option value="Landers">Landers</option>
-                    <option value="SM Beauty">SM Beauty</option>
-                    <option value="Look">Look</option>
-                </select>
-            </div>
-        </div>
 
-        <h2>Mga Items</h2>
-        <table>
-            <thead>
+<div class="container">
+    <header>
+        <div class="brand">
+            <h1>I-JIN INTERNATIONAL</h1>
+            <p>Delivery Receipt & Google Drive Sync System</p>
+        </div>
+        <div class="actions">
+            <button class="btn-red" onclick="clearDraft()">🗑️ New / Clear</button>
+            <button class="btn-indigo" onclick="openHistoryModal()">📜 View History</button>
+            <button class="btn-teal" onclick="saveAsFile()">💾 Save JSON File</button>
+            <button class="btn-green" onclick="saveOnlyToGoogleDrive()">☁️ Save to Google Drive</button>
+            <button class="btn-orange" onclick="exportToCSV()">📥 Export CSV (Manual)</button>
+            <button class="btn-blue" onclick="printReceipt()">🖨️ Print / PDF</button>
+        </div>
+    </header>
+
+    <!-- GALLERY VIEW DASHBOARD -->
+    <div id="galleryDashboard" class="card">
+        <div class="card-title">
+            <span>Retail Partners / Shop Gallery View</span>
+            <span style="color: #38bdf8;">Pumili ng shop para sa DR encoding</span>
+        </div>
+        <div class="gallery-container" id="shopGalleryGrid"></div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">Header & Logistics Metadata</div>
+        <div class="excel-grid">
+            <table class="field-table">
                 <tr>
-                    <th>Deliver To</th>
-                    <th>Item Code</th>
-                    <th>Description</th>
-                    <th>Qty</th>
-                    <th>Amount</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody id="itemsTableBody">
-                <tr class="item-row">
-                    <td><input type="text" class="deliver-to" placeholder="Branch"></td>
-                    <td><input type="text" class="item-code" placeholder="SKU/Code"></td>
-                    <td><input type="text" class="description" placeholder="Pangalan ng Item"></td>
-                    <td><input type="number" class="qty" placeholder="0"></td>
-                    <td><input type="number" step="0.01" class="amount" placeholder="0.00"></td>
-                    <td style="text-align: center;">
-                        <button type="button" class="btn-delete" onclick="removeItemRow(this)">Tanggalin</button>
+                    <td class="field-name">Approved:</td>
+                    <td>
+                        <select id="approvedStatus" onchange="autoSaveDraft()">
+                            <option value="APPROVED FOR DELIVERY" selected>APPROVED FOR DELIVERY</option>
+                            <option value="FOR APPROVAL">FOR APPROVAL</option>
+                            <option value="WILL DELIVER W/O APPROVAL">WILL DELIVER W/O APPROVAL</option>
+                        </select>
                     </td>
                 </tr>
-            </tbody>
-        </table>
+                <tr>
+                    <td class="field-name">STATUS:</td>
+                    <td>
+                        <select id="mainStatus" onchange="autoSaveDraft()">
+                            <option value="DELIVERED" selected>DELIVERED</option>
+                            <option value="PREPARING">PREPARING</option>
+                            <option value="CHECKED">CHECKED</option>
+                            <option value="PENDING DELIVER">PENDING DELIVER</option>
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="field-name">JEN STATUS:</td>
+                    <td>
+                        <select id="jenStatus" onchange="autoSaveDraft()">
+                            <option value="DONE OUTBOUND" selected>DONE OUTBOUND</option>
+                            <option value="PENDING">PENDING</option>
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="field-name">SIR STATUS:</td>
+                    <td>
+                        <select id="sirStatus" onchange="autoSaveDraft()">
+                            <option value="PENDING" selected>PENDING</option>
+                            <option value="CONFIRM">CONFIRM</option>
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="field-name">Prepared by:</td>
+                    <td><input type="text" id="preparedBy" value="CHADY" oninput="autoSaveDraft()"></td>
+                </tr>
+                <tr>
+                    <td class="field-name">Check by:</td>
+                    <td><input type="text" id="checkBy" value="JEN" oninput="autoSaveDraft()"></td>
+                </tr>
+                <tr>
+                    <td class="field-name">Received by:</td>
+                    <td><input type="text" id="receivedBy" value="STORE PERSONNEL" oninput="autoSaveDraft()"></td>
+                </tr>
+                <tr>
+                    <td class="field-name">Delivered:</td>
+                    <td><input type="text" id="deliveredBy" value="AARON" oninput="autoSaveDraft()"></td>
+                </tr>
+            </table>
 
-        <div class="clearfix">
-            <button type="button" class="btn-add" onclick="addItemRow()">+ Magdagdag ng Item</button>
-            <button type="button" class="btn-save" onclick="saveToGoogleDrive()">💾 Save to Google Drive</button>
+            <table class="field-table">
+                <tr>
+                    <td class="field-name">Date of Delivery:</td>
+                    <td><input type="text" id="deliveryDate" oninput="autoSaveDraft()"></td>
+                </tr>
+                <tr>
+                    <td class="field-name">DR #:</td>
+                    <td><input type="text" id="drNo" oninput="autoSaveDraft()"></td>
+                </tr>
+                <tr>
+                    <td class="field-name">Delivery Schedule:</td>
+                    <td><input type="text" id="deliverySchedule" oninput="autoSaveDraft()"></td>
+                </tr>
+                <tr>
+                    <td class="field-name">Total Qty of Boxes:</td>
+                    <td><input type="number" id="totalBoxes" oninput="autoSaveDraft()"></td>
+                </tr>
+                <tr>
+                    <td class="field-name">Total Value:</td>
+                    <td><input type="text" id="totalValueDisplay" value="₱0.00" readonly></td>
+                </tr>
+                <tr>
+                    <td class="field-name">Store Code:</td>
+                    <td><input type="text" id="storeCode" oninput="autoSaveDraft()"></td>
+                </tr>
+                <tr>
+                    <td class="field-name">Shop :</td>
+                    <td>
+                        <select id="shopSelect" onchange="updateDeliverToBranches(); autoSaveDraft();">
+                            <option value="">-- Select Shop --</option>
+                            <option value="Watsons, SM Beauty, Look">Watsons, SM Beauty, Look</option>
+                            <option value="Landers">Landers</option>
+                            <option value="Landmark">Landmark</option>
+                            <option value="Mitsukoshi">Mitsukoshi</option>
+                            <option value="Metro Gaisano">Metro Gaisano</option>
+                            <option value="Robinsons">Robinsons</option>
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="field-name">Deliver To :</td>
+                    <td><input type="text" id="deliverTo" list="branchList" placeholder="Select branch..." oninput="autoSaveDraft()">
+                        <datalist id="branchList"></datalist>
+                    </td>
+                </tr>
+            </table>
         </div>
     </div>
 
-    <script>
-        function addItemRow() {
-            let tbody = document.getElementById('itemsTableBody');
-            let newRow = document.createElement('tr');
-            newRow.classList.add('item-row');
-            newRow.innerHTML = `
-                <td><input type="text" class="deliver-to" placeholder="Branch"></td>
-                <td><input type="text" class="item-code" placeholder="SKU/Code"></td>
-                <td><input type="text" class="description" placeholder="Pangalan ng Item"></td>
-                <td><input type="number" class="qty" placeholder="0"></td>
-                <td><input type="number" step="0.01" class="amount" placeholder="0.00"></td>
-                <td style="text-align: center;">
-                    <button type="button" class="btn-delete" onclick="removeItemRow(this)">Tanggalin</button>
-                </td>
+    <div class="card">
+        <div class="card-title">Line Items</div>
+        <div class="table-responsive">
+            <table id="itemsTable">
+                <thead>
+                    <tr>
+                        <th>Item Code</th>
+                        <th>Item Description</th>
+                        <th>Qty</th>
+                        <th>Unit Price</th>
+                        <th>Final Amount</th>
+                        <th>Remarks</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="itemsBody"></tbody>
+            </table>
+        </div>
+        <button class="btn-add" onclick="addRow()">+ Add Item</button>
+    </div>
+</div>
+
+<script>
+    const shopBranches = {
+        "Watsons, SM Beauty, Look": ["WATSONS SHANGRI LA MALL 3 MANDALUYONG (6977) (COSRX,SKIN1004,MEDICUBE,ISOI)", "Gateway Mall 2", "SM North Edsa", "SM Mall of Asia"],
+        "Landers": ["Landers Balintawak", "Landers Otis", "Landers Alabang"],
+        "Landmark": ["Landmark Makati", "Landmark Trinoma"],
+        "Mitsukoshi": ["Mitsukoshi BGC"],
+        "Metro Gaisano": ["Metro Market Market"],
+        "Robinsons": ["Robinsons Galleria", "Robinsons Magnolia"]
+    };
+
+    const productMasterList = {
+        "141": { desc: "AHA/BHA Clarifying Treatment Toner 150ml", price: 710 },
+        "00141": { desc: "AHA/BHA Clarifying Treatment Toner 150ml", price: 710 },
+        "143": { desc: "Advanced Snail 96 Mucin Power Essence 100ml", price: 950 },
+        "00143": { desc: "Advanced Snail 96 Mucin Power Essence 100ml", price: 950 },
+        "145": { desc: "Aloe Soothing Sun Cream SPF50 PA+++ 50ml", price: 720 },
+        "00145": { desc: "Aloe Soothing Sun Cream SPF50 PA+++ 50ml", price: 720 },
+        "148": { desc: "Oil Free Ultra Moisturizing Lotion 100ml", price: 1070 },
+        "00148": { desc: "Oil Free Ultra Moisturizing Lotion 100ml", price: 1070 },
+        "11976": { desc: "Salicylic Acid Daily Gentle Cleanser 150ml", price: 560 },
+        "150": { desc: "BHA Blackhead Power Liquid 100ml", price: 1050 },
+        "00150": { desc: "BHA Blackhead Power Liquid 100ml", price: 1050 },
+        "152": { desc: "Advanced Snail 92 All in one Cream 100ml", price: 1070 },
+        "00152": { desc: "Advanced Snail 92 All in one Cream 100ml", price: 1070 },
+        "756": { desc: "Low pH Good Morning Gel Cleanser 150ml", price: 560 },
+        "00756": { desc: "Low pH Good Morning Gel Cleanser 150ml", price: 560 },
+        "1486": { desc: "Acne Pimple Master Patch [24 patches]", price: 200 },
+        "01486": { desc: "Acne Pimple Master Patch [24 patches]", price: 200 },
+        "2333": { desc: "AC Collection Calming Foam Cleanser 150ml", price: 730 },
+        "02333": { desc: "AC Collection Calming Foam Cleanser 150ml", price: 730 }
+    };
+
+    function lookupItem(inputElement) {
+        let row = inputElement.closest('tr');
+        let code = inputElement.value.trim();
+        
+        if (productMasterList[code]) {
+            let item = productMasterList[code];
+            let descArea = row.querySelector('.item-desc');
+            descArea.value = item.desc;
+            autoResize(descArea);
+            
+            row.querySelector('.item-price').value = item.price;
+            calculateTotals();
+        }
+    }
+
+    function autoResize(textarea) {
+        textarea.style.height = 'auto';
+        textarea.style.height = textarea.scrollHeight + 'px';
+    }
+
+    function renderShopGallery() {
+        let grid = document.getElementById('shopGalleryGrid');
+        grid.innerHTML = '';
+        let history = JSON.parse(localStorage.getItem('ijin_dr_history')) || [];
+
+        Object.keys(shopBranches).forEach(shopName => {
+            let count = history.filter(item => item.data.shopSelect === shopName).length;
+            let card = document.createElement('div');
+            card.className = 'shop-card';
+            card.onclick = () => selectShopFromGallery(shopName);
+            card.innerHTML = `
+                <div class="shop-card-header"><h3>${shopName}</h3></div>
+                <div class="shop-card-footer"><span>${count} Saved</span><span>📂 Open</span></div>
             `;
-            tbody.appendChild(newRow);
+            grid.appendChild(card);
+        });
+    }
+
+    function selectShopFromGallery(shopName) {
+        document.getElementById('shopSelect').value = shopName;
+        updateDeliverToBranches();
+        autoSaveDraft();
+    }
+
+    function updateDeliverToBranches() {
+        let shop = document.getElementById('shopSelect').value;
+        let dataList = document.getElementById('branchList');
+        dataList.innerHTML = '';
+        if (shopBranches[shop]) {
+            shopBranches[shop].forEach(branch => {
+                let opt = document.createElement('option');
+                opt.value = branch;
+                dataList.appendChild(opt);
+            });
+        }
+    }
+
+    function addRow(data = {}) {
+        let tbody = document.getElementById('itemsBody');
+        let tr = document.createElement('tr');
+        
+        let code = data.Item_Code ? String(data.Item_Code).trim() : '';
+        let desc = data.Description || '';
+        let price = data.Unit_Price !== undefined ? data.Unit_Price : 0;
+        let qty = data.Qty !== undefined ? data.Qty : 1;
+
+        if (code && productMasterList[code] && !data.Description) {
+            let master = productMasterList[code];
+            desc = master.desc;
+            price = master.price;
         }
 
-        function removeItemRow(button) {
-            let row = button.closest('tr');
-            if (document.querySelectorAll('.item-row').length > 1) {
-                row.remove();
-            } else {
-                alert('Kailangang may kahit isang item man lang.');
+        tr.innerHTML = `
+            <td><input type="text" class="item-code" value="${code}" oninput="lookupItem(this); autoSaveDraft();"></td>
+            <td><textarea class="item-desc" oninput="autoResize(this); autoSaveDraft();">${desc}</textarea></td>
+            <td><input type="number" class="item-qty" value="${qty}" oninput="calculateTotals()"></td>
+            <td><input type="number" class="item-price" value="${price}" oninput="calculateTotals()"></td>
+            <td><input type="number" class="item-amount" value="${data.Final_Amount || '0.00'}" readonly></td>
+            <td><input type="text" class="item-remarks" value="${data.Remarks || 'NO ISSUES'}" oninput="autoSaveDraft()"></td>
+            <td><button class="btn-del" onclick="deleteRow(this)">Remove</button></td>
+        `;
+        tbody.appendChild(tr);
+        
+        let newTextarea = tr.querySelector('.item-desc');
+        autoResize(newTextarea);
+        calculateTotals();
+    }
+
+    function deleteRow(btn) {
+        btn.closest('tr').remove();
+        calculateTotals();
+    }
+
+    function calculateTotals() {
+        let rows = document.querySelectorAll('#itemsBody tr');
+        let grandTotal = 0;
+        rows.forEach(row => {
+            let qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+            let price = parseFloat(row.querySelector('.item-price').value) || 0;
+            let amount = qty * price;
+            row.querySelector('.item-amount').value = amount.toFixed(2);
+            grandTotal += amount;
+        });
+        let formattedTotal = '₱ ' + grandTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        document.getElementById('totalValueDisplay').value = formattedTotal;
+        autoSaveDraft();
+    }
+
+    function getFormData() {
+        let formData = {
+            approvedStatus: document.getElementById('approvedStatus').value,
+            mainStatus: document.getElementById('mainStatus').value,
+            jenStatus: document.getElementById('jenStatus').value,
+            sirStatus: document.getElementById('sirStatus').value,
+            preparedBy: document.getElementById('preparedBy').value,
+            checkBy: document.getElementById('checkBy').value,
+            receivedBy: document.getElementById('receivedBy').value,
+            deliveredBy: document.getElementById('deliveredBy').value,
+            deliveryDate: document.getElementById('deliveryDate').value,
+            drNo: document.getElementById('drNo').value,
+            deliverySchedule: document.getElementById('deliverySchedule').value,
+            totalBoxes: document.getElementById('totalBoxes').value,
+            storeCode: document.getElementById('storeCode').value,
+            shopSelect: document.getElementById('shopSelect').value,
+            deliverTo: document.getElementById('deliverTo').value,
+            items: []
+        };
+        document.querySelectorAll('#itemsBody tr').forEach(row => {
+            formData.items.push({
+                Item_Code: row.querySelector('.item-code').value,
+                Description: row.querySelector('.item-desc').value,
+                Qty: row.querySelector('.item-qty').value,
+                Unit_Price: row.querySelector('.item-price').value,
+                Final_Amount: row.querySelector('.item-amount').value,
+                Remarks: row.querySelector('.item-remarks').value
+            });
+        });
+        return formData;
+    }
+
+    function autoSaveDraft() {
+        localStorage.setItem('ijin_dr_draft', JSON.stringify(getFormData()));
+    }
+
+    function loadDraft() {
+        let saved = localStorage.getItem('ijin_dr_draft');
+        if (saved) {
+            let data = JSON.parse(saved);
+            document.getElementById('approvedStatus').value = data.approvedStatus || '';
+            document.getElementById('mainStatus').value = data.mainStatus || '';
+            document.getElementById('jenStatus').value = data.jenStatus || '';
+            document.getElementById('sirStatus').value = data.sirStatus || '';
+            document.getElementById('preparedBy').value = data.preparedBy || '';
+            document.getElementById('checkBy').value = data.checkBy || '';
+            document.getElementById('receivedBy').value = data.receivedBy || '';
+            document.getElementById('deliveredBy').value = data.deliveredBy || '';
+            document.getElementById('deliveryDate').value = data.deliveryDate || '';
+            document.getElementById('drNo').value = data.drNo || '';
+            document.getElementById('deliverySchedule').value = data.deliverySchedule || '';
+            document.getElementById('totalBoxes').value = data.totalBoxes || '';
+            document.getElementById('storeCode').value = data.storeCode || '';
+            if (data.shopSelect) {
+                document.getElementById('shopSelect').value = data.shopSelect;
+                updateDeliverToBranches();
             }
-        }
-
-        async function saveToGoogleDrive() {
-            const drNo = document.getElementById('drNoInput').value.trim();
-            const shopName = document.getElementById('shopSelect').value;
-
-            if (!drNo) {
-                alert('Pakilagay muna ang DR Number!');
+            document.getElementById('deliverTo').value = data.deliverTo || '';
+            if (data.items && data.items.length > 0) {
+                document.getElementById('itemsBody').innerHTML = '';
+                data.items.forEach(item => addRow(item));
+                document.querySelectorAll('.item-desc').forEach(ta => autoResize(ta));
                 return;
             }
+        }
+        addRow();
+    }
 
-            let items = [];
-            let isValid = true;
+    // --- SAVE ONLY TO GOOGLE DRIVE (WALANG AUTO-DOWNLOAD SA PC) ---
+    async function saveOnlyToGoogleDrive() {
+        const scriptUrl = 'ILAGAY_MO_DITO_ANG_BAGONG_APPS_SCRIPT_URL'; // I-paste dito ang iyong Google Apps Script Web App URL
 
-            document.querySelectorAll('.item-row').forEach(row => {
-                let deliverTo = row.querySelector('.deliver-to').value.trim();
-                let itemCode = row.querySelector('.item-code').value.trim();
-                let description = row.querySelector('.description').value.trim();
-                let qty = row.querySelector('.qty').value.trim();
-                let amount = row.querySelector('.amount').value.trim();
+        let currentData = getFormData();
+        
+        let payloadData = {
+            shop: currentData.shopSelect,
+            drNo: currentData.drNo,
+            data: currentData.items.map(item => ({
+                "Deliver_To": currentData.deliverTo,
+                "Item_Code": item.Item_Code,
+                "Description": item.Description,
+                "Qty": item.Qty,
+                "Final_Amount": item.Final_Amount
+            }))
+        };
 
-                if (!itemCode || !qty) {
-                    isValid = false;
-                }
-
-                items.push({
-                    Deliver_To: deliverTo,
-                    Item_Code: itemCode,
-                    Description: description,
-                    Qty: qty,
-                    Final_Amount: amount || "0"
-                });
+        try {
+            let response = await fetch(scriptUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payloadData)
             });
 
-            if (!isValid) {
-                alert('Pakipunan ang Item Code at Qty ng lahat ng row.');
-                return;
+            if (response.ok) {
+                alert('Matagumpay na na-save ang file direkta sa Google Drive folder!');
+            } else {
+                alert('Nagka-problema sa pag-save sa Google Drive.');
             }
-
-            const scriptUrl = 'ILAGAY_MO_DITO_ANG_BAGONG_WEB_APP_URL';
-
-            let payload = {
-                token: "DR_OFFLINE_SECURE_2026",
-                shop: shopName,
-                drNo: drNo,
-                data: items
-            };
-
-            try {
-                let response = await fetch(scriptUrl, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(payload)
-                });
-
-                alert('Matagumpay na nai-padala ang kahilingan para sa shop na ' + shopName + '! Tingnan ang Google Drive folder.');
-            } catch (error) {
-                alert('Nagka-error sa koneksyon: ' + error);
-            }
+        } catch (error) {
+            console.error(error);
+            alert('May aberya sa koneksyon patungo sa Google Drive.');
         }
-    </script>
+    }
+
+    function exportToCSV() {
+        let rows = document.querySelectorAll('#itemsBody tr');
+        let csvContent = "data:text/csv;charset=utf-8,DR_No,Shop,Deliver_To,Item_Code,Description,Qty,Amount\r\n";
+        let drNo = document.getElementById('drNo').value;
+        let shop = document.getElementById('shopSelect').value;
+        let deliverTo = document.getElementById('deliverTo').value;
+
+        rows.forEach(row => {
+            let code = row.querySelector('.item-code').value;
+            let desc = row.querySelector('.item-desc').value;
+            let qty = row.querySelector('.item-qty').value;
+            let amt = row.querySelector('.item-amount').value;
+            csvContent += `${drNo},"${shop}","${deliverTo}",${code},"${desc}",${qty},${amt}\r\n`;
+        });
+
+        let encodedUri = encodeURI(csvContent);
+        let link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `DR_${drNo || 'Draft'}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    }
+
+    loadDraft();
+    renderShopGallery();
+</script>
+
 </body>
 </html>
