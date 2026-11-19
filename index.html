@@ -96,7 +96,20 @@
       <div id="adminStaff" class="card admin-content"><h3>Staff Accounts</h3><p class="muted">Staff accounts are managed through the secure Cloudflare backend. Up to 9 active staff accounts.</p><form id="staffForm" class="staff-form"><label>Full name<input id="staffName" placeholder="Staff full name" required></label><label>Work email<input id="staffEmail" type="email" placeholder="staff@company.com" required></label><label>Temporary password<input id="staffPassword" type="password" minlength="12" placeholder="At least 12 characters" required></label><button id="addStaffBtn" class="btn-green" type="submit">+ Add Staff</button></form><p id="adminError" role="alert"></p><button type="button" class="btn-blue" onclick="loadStaff()">↻ Refresh Staff List</button><div id="staffList" class="staff-list"></div></div>
       <div id="adminRecords" class="card admin-content" hidden><h3>DR Records by Shop</h3><p class="muted">Counts reflect Google Drive after successful synchronization.</p><button class="btn-blue" onclick="adminRefreshCounts()">🔄 Refresh Counts</button><div id="adminShopCounts" class="admin-shop-grid"></div></div>
       <div id="adminActivity" class="card admin-content" hidden><h3>Recent Activity</h3><p class="muted">Server-recorded DR creation and updates.</p><button class="btn-blue" onclick="loadActivity()">🔄 Refresh Activity</button><div id="activityList" class="staff-list"></div></div>
-      <div id="adminSettings" class="card admin-content" hidden><h3>System Settings</h3><p>Company Drive: managed through the secure backend. No Google passwords or refresh tokens are stored in this website.</p><p class="muted">Firebase login and user-role verification are connected. Staff management and Drive features require a separately deployed secure backend.</p><p>Staff capacity: 9 active staff. Administrator: 1.</p></div>
+      <div id="adminSettings" class="card admin-content" hidden>
+        <h3>System Settings</h3>
+        <p>Company Google Drive is managed through the secure Cloudflare backend. No Google passwords, client secrets, or refresh tokens are stored in this website.</p>
+        <div class="card" style="margin-top:18px">
+          <h3>Google Drive Connection</h3>
+          <p id="driveConnectionStatus" role="status" aria-live="polite" class="muted">Connection status has not been checked.</p>
+          <div class="actions" style="margin:14px 0">
+            <button type="button" class="btn-blue" id="driveConnectBtn" onclick="connectCompanyDrive()">🔗 Connect Google Drive</button>
+            <button type="button" class="btn-teal" id="driveCheckBtn" onclick="checkCompanyDrive()">🔄 Check Connection</button>
+          </div>
+          <p class="muted">The backend must implement <code>/api/google/status</code> and <code>/api/google/auth</code>. Connecting authorizes the company Drive account, not each staff member.</p>
+        </div>
+        <p>Staff capacity: 9 active staff. Administrator: 1.</p>
+      </div>
     </section>
     <div id="encodingWindow" hidden>
     <!-- GALLERY VIEW DASHBOARD -->
@@ -527,7 +540,47 @@
             document.getElementById('admin'+key[0].toUpperCase()+key.slice(1)).hidden = key !== tab;
             document.getElementById('tab'+key[0].toUpperCase()+key.slice(1)).classList.toggle('selected',key===tab);
         }
+        if (tab === 'settings') checkCompanyDrive();
     }
+    // The Google OAuth flow must be initiated and completed by the secure backend.
+    // No OAuth client secret or refresh token belongs in this public GitHub HTML.
+    async function checkCompanyDrive() {
+        const status = document.getElementById('driveConnectionStatus');
+        const btn = document.getElementById('driveCheckBtn');
+        if (userRole !== 'admin') return;
+        btn.disabled = true;
+        status.textContent = 'Checking company Google Drive connection…';
+        try {
+            const result = await api('/api/google/status');
+            const connected = result.connected === true;
+            status.textContent = connected
+                ? '✅ Google Drive connected' + (result.email ? ' as ' + result.email : '') + '.'
+                : '⚠️ Google Drive is not connected yet.';
+            document.getElementById('driveConnectBtn').textContent = connected ? '🔄 Reconnect Google Drive' : '🔗 Connect Google Drive';
+        } catch (e) {
+            status.textContent = '⚠️ Unable to check Google Drive: ' + e.message + '. Confirm the backend Google OAuth routes are deployed.';
+        } finally { btn.disabled = false; }
+    }
+    async function connectCompanyDrive() {
+        if (userRole !== 'admin') return;
+        const btn = document.getElementById('driveConnectBtn');
+        const status = document.getElementById('driveConnectionStatus');
+        btn.disabled = true;
+        status.textContent = 'Requesting a secure Google authorization link…';
+        try {
+            // This must return {url: "https://accounts.google.com/..."} after
+            // server-side admin verification and OAuth state/PKCE protection.
+            const result = await api('/api/google/auth');
+            const url = new URL(result.url);
+            if (url.protocol !== 'https:' || url.hostname !== 'accounts.google.com')
+                throw new Error('Backend did not return a valid Google authorization URL.');
+            status.textContent = 'Opening Google authorization. After approving, return here and click Check Connection.';
+            window.location.assign(url.href);
+        } catch (e) {
+            status.textContent = '⚠️ Cannot start Google authorization: ' + e.message + '. The backend OAuth route must be deployed first.';
+        } finally { btn.disabled = false; }
+    }
+
     async function adminRefreshCounts() {
         try {const r=await api('/api/counts');driveCounts=r.counts;renderShopGallery();
             document.getElementById('totalDrCount').textContent=Object.values(r.counts).reduce((a,b)=>a+Number(b||0),0);
