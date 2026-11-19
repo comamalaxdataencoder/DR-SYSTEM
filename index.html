@@ -106,7 +106,7 @@
             <button type="button" class="btn-blue" id="driveConnectBtn" onclick="connectCompanyDrive()">🔗 Connect Google Drive</button>
             <button type="button" class="btn-teal" id="driveCheckBtn" onclick="checkCompanyDrive()">🔄 Check Connection</button>
           </div>
-          <p class="muted">The backend must implement <code>/api/google/status</code> and <code>/api/google/auth</code>. Connecting authorizes the company Drive account, not each staff member.</p>
+          <p class="muted">The backend must implement <code>/api/google/status</code> and <code>/api/google/connect</code>. Connecting authorizes the company Drive account, not each staff member.</p>
         </div>
         <p>Staff capacity: 9 active staff. Administrator: 1.</p>
       </div>
@@ -570,7 +570,7 @@
         try {
             // This must return {url: "https://accounts.google.com/..."} after
             // server-side admin verification and OAuth state/PKCE protection.
-            const result = await api('/api/google/auth');
+            const result = await api('/api/google/connect');
             const url = new URL(result.url);
             if (url.protocol !== 'https:' || url.hostname !== 'accounts.google.com')
                 throw new Error('Backend did not return a valid Google authorization URL.');
