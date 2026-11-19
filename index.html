@@ -93,7 +93,7 @@
       <div class="admin-heading"><div><p class="eyebrow">ADMINISTRATOR CONTROL CENTER</p><h2>Admin Dashboard</h2><p>Manage authorized users and monitor Delivery Receipt activity.</p></div><button class="btn-blue" onclick="showEncodingWindow()">Open DR Encoding →</button></div>
       <div class="admin-stats"><div class="stat"><span>Account capacity</span><strong>10</strong><small>1 Admin + 9 Staff</small></div><div class="stat"><span>Active staff</span><strong id="activeStaffCount">—</strong><small>Maximum 9</small></div><div class="stat"><span>DR files in Drive</span><strong id="totalDrCount">—</strong><small>From synced shop folders</small></div><div class="stat"><span>Recent activity</span><strong id="activityCount">—</strong><small>Latest recorded events</small></div></div>
       <div class="admin-tabs"><button id="tabStaff" class="selected" onclick="showAdminTab('staff')">👥 Staff Management</button><button id="tabRecords" onclick="showAdminTab('records')">📁 DR Records</button><button id="tabActivity" onclick="showAdminTab('activity')">🕒 Activity Logs</button><button id="tabSettings" onclick="showAdminTab('settings')">⚙️ Settings</button></div>
-      <div id="adminStaff" class="card admin-content"><h3>Staff Accounts</h3><p class="muted">Account verification is active. Staff account creation requires a secure backend; this form is disabled until connected.</p><form id="staffForm" class="staff-form"><label>Full name<input id="staffName" placeholder="Staff full name" required></label><label>Work email<input id="staffEmail" type="email" placeholder="staff@company.com" required></label><label>Temporary password<input id="staffPassword" type="password" minlength="12" placeholder="At least 12 characters" required></label><button class="btn-green" type="submit" disabled title="Requires secure backend">+ Add Staff (backend needed)</button></form><p id="adminError" role="alert"></p><div id="staffList" class="staff-list"></div></div>
+      <div id="adminStaff" class="card admin-content"><h3>Staff Accounts</h3><p class="muted">Staff accounts are managed through the secure Cloudflare backend. Up to 9 active staff accounts.</p><form id="staffForm" class="staff-form"><label>Full name<input id="staffName" placeholder="Staff full name" required></label><label>Work email<input id="staffEmail" type="email" placeholder="staff@company.com" required></label><label>Temporary password<input id="staffPassword" type="password" minlength="12" placeholder="At least 12 characters" required></label><button id="addStaffBtn" class="btn-green" type="submit">+ Add Staff</button></form><p id="adminError" role="alert"></p><button type="button" class="btn-blue" onclick="loadStaff()">↻ Refresh Staff List</button><div id="staffList" class="staff-list"></div></div>
       <div id="adminRecords" class="card admin-content" hidden><h3>DR Records by Shop</h3><p class="muted">Counts reflect Google Drive after successful synchronization.</p><button class="btn-blue" onclick="adminRefreshCounts()">🔄 Refresh Counts</button><div id="adminShopCounts" class="admin-shop-grid"></div></div>
       <div id="adminActivity" class="card admin-content" hidden><h3>Recent Activity</h3><p class="muted">Server-recorded DR creation and updates.</p><button class="btn-blue" onclick="loadActivity()">🔄 Refresh Activity</button><div id="activityList" class="staff-list"></div></div>
       <div id="adminSettings" class="card admin-content" hidden><h3>System Settings</h3><p>Company Drive: managed through the secure backend. No Google passwords or refresh tokens are stored in this website.</p><p class="muted">Firebase login and user-role verification are connected. Staff management and Drive features require a separately deployed secure backend.</p><p>Staff capacity: 9 active staff. Administrator: 1.</p></div>
@@ -475,7 +475,7 @@
         const token = await authUser.getIdToken();
         const res = await fetch(API_BASE + path, {...options, headers: {'Authorization': 'Bearer ' + token, 'Content-Type':'application/json', ...(options.headers || {})}});
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || 'Server error (' + res.status + ')');
+        if (!res.ok) throw new Error(data.error || data.message || 'Server error (' + res.status + ')');
         return data;
     }
     async function syncGoogleDriveHistory() {
@@ -542,25 +542,82 @@
             for(const event of r.events){const div=document.createElement('div');const line=document.createElement('span');line.textContent=(event.actorName||'Staff')+' • '+(event.action||'action')+' • '+(event.drNumber||'')+' • '+(event.shop||'');const time=document.createElement('small');time.textContent=event.at?new Date(event.at).toLocaleString():'';div.append(line,time);target.append(div)}
         }catch(e){target.textContent='Unable to load activity: '+e.message}
     }
+    function staffRow(staff) {
+        const row = document.createElement('div');
+        const info = document.createElement('span');
+        const name = staff.name || staff.displayName || staff.email || 'Staff';
+        info.textContent = name + ' — ' + (staff.email || '') + ' — ' + (staff.active ? 'Active' : 'Inactive');
+        row.append(info);
+        if (staff.uid && staff.uid !== authUser.uid) {
+            const toggle = document.createElement('button');
+            toggle.className = staff.active ? 'btn-red' : 'btn-green';
+            toggle.textContent = staff.active ? 'Deactivate' : 'Activate';
+            toggle.addEventListener('click', async () => {
+                if (!confirm((staff.active ? 'Deactivate ' : 'Activate ') + name + '?')) return;
+                toggle.disabled = true;
+                try {
+                    await api('/api/admin/staff/' + encodeURIComponent(staff.uid), {
+                        method:'PATCH', body:JSON.stringify({active:!staff.active})
+                    });
+                    await loadStaff();
+                } catch (e) { document.getElementById('adminError').textContent=e.message; toggle.disabled=false; }
+            });
+            row.append(toggle);
+            const reset = document.createElement('button');
+            reset.className='btn-orange';
+            reset.textContent='Reset Password';
+            reset.addEventListener('click', async () => {
+                if (!confirm('Send a password reset email to ' + (staff.email || name) + '?')) return;
+                reset.disabled=true;
+                try {
+                    await api('/api/admin/staff/' + encodeURIComponent(staff.uid) + '/password', {method:'POST',body:'{}'});
+                    alert('Password reset request submitted.');
+                } catch(e) { document.getElementById('adminError').textContent=e.message; }
+                finally {reset.disabled=false;}
+            });
+            row.append(reset);
+        }
+        return row;
+    }
     async function loadStaff() {
         const target=document.getElementById('staffList');
         const error=document.getElementById('adminError');
-        target.replaceChildren();error.textContent='';
+        target.replaceChildren();error.textContent='Loading staff accounts…';
         document.getElementById('activeStaffCount').textContent='—';
+        if (userRole !== 'admin') return;
         try {
-            const snap=await firestoreModules.getDoc(firestoreModules.doc(firestoreDb,'users',authUser.uid));
-            if(snap.exists()) {
+            const result=await api('/api/admin/staff');
+            if (!Array.isArray(result.staff)) throw new Error('Unexpected staff list response.');
+            const staff=result.staff.filter(x=>x.role!=='admin');
+            const active=staff.filter(x=>x.active===true).length;
+            document.getElementById('activeStaffCount').textContent=String(active);
+            error.textContent='';
+            if (!staff.length) target.textContent='No staff accounts created yet.';
+            staff.forEach(x=>target.append(staffRow(x)));
+        } catch(e) {
+            error.textContent='Staff backend not ready: ' + e.message + '. Deploy the secure /api/admin/staff endpoints first.';
+            const snap=await firestoreModules.getDoc(firestoreModules.doc(firestoreDb,'users',authUser.uid)).catch(()=>null);
+            if (snap?.exists()) {
                 const p=snap.data();const row=document.createElement('div');
                 row.textContent=(p.displayName||authUser.email)+' — '+authUser.email+' — '+p.role+' (current account)';
                 target.append(row);
             }
-            error.textContent='Creating, listing, deactivating, and resetting staff accounts requires the secure backend. Firebase login and the current user profile are connected.';
-        } catch(e) {error.textContent='Unable to read account: '+e.message}
+        }
     }
-    document.getElementById('staffForm').addEventListener('submit',async(e)=>{e.preventDefault();
+    document.getElementById('staffForm').addEventListener('submit',async(e)=>{
+        e.preventDefault();
         const error=document.getElementById('adminError');error.textContent='';
-        try{await api('/api/admin/staff',{method:'POST',body:JSON.stringify({name:document.getElementById('staffName').value,email:document.getElementById('staffEmail').value,password:document.getElementById('staffPassword').value})});e.target.reset();await loadStaff()}
-        catch(err){error.textContent=err.message}
+        if(userRole!=='admin') {error.textContent='Admin access required.';return;}
+        const btn=document.getElementById('addStaffBtn');btn.disabled=true;
+        try {
+            const name=document.getElementById('staffName').value.trim();
+            const email=document.getElementById('staffEmail').value.trim();
+            const password=document.getElementById('staffPassword').value;
+            if(password.length<12) throw new Error('Password must have at least 12 characters.');
+            await api('/api/admin/staff',{method:'POST',body:JSON.stringify({name,email,password})});
+            e.target.reset();await loadStaff();alert('Staff account created successfully.');
+        } catch(err) {error.textContent='Unable to add staff: '+err.message;}
+        finally {btn.disabled=false;}
     });
     async function startAuth() {
         if (!FIREBASE_CONFIG) {document.getElementById('authError').textContent='Firebase configuration missing.';return;}
