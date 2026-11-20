@@ -136,6 +136,16 @@
     .activity-filters input,.activity-filters select{width:100%;min-width:0;background:#0f172a;color:#f8fafc;border:1px solid #475569;border-radius:7px;padding:10px}
     @media(max-width:900px){.activity-filters{grid-template-columns:1fr 1fr}}
     @media(max-width:600px){.activity-filters{grid-template-columns:1fr}}
+    .dash-filters{display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin:16px 0}
+    .dash-filters label{display:grid;gap:6px;color:#cbd5e1;font-size:12px}
+    .dash-filters input{background:#0f172a;color:#fff;border:1px solid #475569;border-radius:7px;padding:10px}
+    .dash-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:16px 0}
+    .dash-stats>div{background:#0f172a;border:1px solid #334155;border-radius:10px;padding:16px}
+    .dash-stats span{display:block;color:#94a3b8;font-size:12px}.dash-stats strong{display:block;font-size:27px;color:#38bdf8;margin-top:8px}
+    .dash-table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}
+    .dash-table th,.dash-table td{padding:12px;border-bottom:1px solid #334155;text-align:left}
+    .dash-table th{color:#cbd5e1}.dash-table td{color:#f8fafc}
+    @media(max-width:750px){.dash-stats{grid-template-columns:repeat(2,1fr)}}
     #adminError{color:#fca5a5}
 
     @media(max-width:900px){.admin-stats{grid-template-columns:repeat(2,1fr)}.staff-form{grid-template-columns:1fr 1fr}}@media(max-width:600px){.admin-stats,.staff-form{grid-template-columns:1fr}.admin-heading{align-items:start;flex-direction:column}}
@@ -192,7 +202,7 @@
 
       <div class="admin-stats"><div class="stat"><span>Account capacity</span><strong>10</strong><small>1 Admin + 9 Staff</small></div><div class="stat"><span>Active staff</span><strong id="activeStaffCount">—</strong><small>Maximum 9</small></div><div class="stat"><span>DR files in Drive</span><strong id="totalDrCount">—</strong><small>From synced shop folders</small></div><div class="stat"><span>Recent activity</span><strong id="activityCount">—</strong><small>Latest recorded events</small></div></div>
 
-      <div class="admin-tabs"><button id="tabStaff" class="selected" onclick="showAdminTab('staff')">👥 Staff Management</button><button id="tabRecords" onclick="showAdminTab('records')">📁 DR Records</button><button id="tabActivity" onclick="showAdminTab('activity')">🕒 Activity Logs</button><button id="tabSettings" onclick="showAdminTab('settings')">⚙️ Settings</button></div>
+      <div class="admin-tabs"><button id="tabStaff" class="selected" onclick="showAdminTab('staff')">👥 Staff Management</button><button id="tabRecords" onclick="showAdminTab('records')">📁 DR Records</button><button id="tabActivity" onclick="showAdminTab('activity')">🕒 Activity Logs</button><button id="tabDashboard" onclick="showAdminTab('dashboard')">📊 Activity Dashboard</button><button id="tabSettings" onclick="showAdminTab('settings')">⚙️ Settings</button></div>
 
       <div id="adminStaff" class="card admin-content"><h3>Staff Accounts</h3><p class="muted">Staff accounts are managed through the secure Cloudflare backend. Up to 9 active staff accounts.</p><form id="staffForm" class="staff-form"><label>Full name<input id="staffName" placeholder="Staff full name" required></label><label>Work email<input id="staffEmail" type="email" placeholder="staff\@company.com" required></label><label>Temporary password<input id="staffPassword" type="password" minlength="12" placeholder="At least 12 characters" required></label><button id="addStaffBtn" class="btn-green" type="submit">+ Add Staff</button></form><p id="adminError" role="alert"></p><button type="button" class="btn-blue" onclick="loadStaff()">↻ Refresh Staff List</button><div id="staffList" class="staff-list"></div></div>
 
@@ -209,6 +219,28 @@
         <div class="actions" style="margin:12px 0"><button class="btn-blue" onclick="loadActivity()">🔄 Refresh Activity</button><button class="btn-green" onclick="exportActivityCSV()">📥 Export to Excel (CSV)</button><button class="btn-indigo" onclick="clearActivityFilters()">Clear Filters</button></div>
         <p id="activitySummary" class="muted" role="status"></p>
         <div id="activityList" class="staff-list"></div>
+      </div>
+
+      <div id="adminDashboard" class="card admin-content" hidden>
+        <h3>Activity Dashboard</h3>
+        <p class="muted">Summary of server-recorded events currently loaded from the backend. DR counts are based on DR_SAVED events, not the total files in Drive.</p>
+        <div class="dash-filters">
+          <label>From date<input id="dashFrom" type="date" onchange="renderActivityDashboard()"></label>
+          <label>To date<input id="dashTo" type="date" onchange="renderActivityDashboard()"></label>
+          <button type="button" class="btn-indigo" onclick="clearDashboardDates()">Clear Dates</button>
+          <button type="button" class="btn-blue" onclick="loadActivity()">🔄 Refresh Dashboard</button>
+        </div>
+        <p id="dashStatus" class="muted" role="status"></p>
+        <div class="dash-stats">
+          <div><span>DR Saved</span><strong id="dashDr">0</strong></div>
+          <div><span>Logins</span><strong id="dashLogin">0</strong></div>
+          <div><span>Logouts</span><strong id="dashLogout">0</strong></div>
+          <div><span>Staff who saved DR</span><strong id="dashStaff">0</strong></div>
+        </div>
+        <h3>DR Saved by Staff and Day</h3>
+        <div class="table-responsive"><table class="dash-table"><thead><tr><th>Date</th><th>Staff</th><th>DR Saved</th></tr></thead><tbody id="dashDailyRows"></tbody></table></div>
+        <h3 style="margin-top:24px">Staff Activity Summary</h3>
+        <div class="table-responsive"><table class="dash-table"><thead><tr><th>Staff</th><th>DR Saved</th><th>Logins</th><th>Logouts</th><th>Other Events</th></tr></thead><tbody id="dashStaffRows"></tbody></table></div>
       </div>
 
       <div id="adminSettings" class="card admin-content" hidden>
@@ -1142,7 +1174,7 @@
 
     function showAdminTab(tab) {
 
-        for (const key of ['staff','records','activity','settings']) {
+        for (const key of ['staff','records','activity','dashboard','settings']) {
 
             document.getElementById('admin'+key[0].toUpperCase()+key.slice(1)).hidden = key !== tab;
 
@@ -1151,6 +1183,7 @@
         }
 
         if (tab === 'settings') checkCompanyDrive();
+        if (tab === 'dashboard') { renderActivityDashboard(); loadActivity(); }
 
     }
 
@@ -1281,6 +1314,71 @@
         }
     }
 
+    function dashboardDate(event) {
+        const date = new Date(event.at);
+        if (Number.isNaN(date.getTime())) return '';
+        return [date.getFullYear(), String(date.getMonth()+1).padStart(2,'0'), String(date.getDate()).padStart(2,'0')].join('-');
+    }
+
+    function clearDashboardDates() {
+        document.getElementById('dashFrom').value = '';
+        document.getElementById('dashTo').value = '';
+        renderActivityDashboard();
+    }
+
+    function renderActivityDashboard() {
+        const from = document.getElementById('dashFrom').value;
+        const to = document.getElementById('dashTo').value;
+        const status = document.getElementById('dashStatus');
+        if (from && to && from > to) {
+            status.textContent = 'From date must be on or before To date.';
+            for (const id of ['dashDr','dashLogin','dashLogout','dashStaff']) document.getElementById(id).textContent = '—';
+            document.getElementById('dashDailyRows').replaceChildren();
+            document.getElementById('dashStaffRows').replaceChildren();
+            return;
+        }
+        const events = activityEvents.filter(e => {
+            const day = dashboardDate(e);
+            return day && (!from || day >= from) && (!to || day <= to);
+        });
+        const drs = events.filter(e => e.action === 'DR_SAVED');
+        const staff = new Map();
+        const daily = new Map();
+        function staffKey(e) { return String(e.uid || e.actorUid || e.actorEmail || e.email || e.actorName || e.name || 'Unknown'); }
+        function staffName(e) { return String(e.actorName || e.name || e.actorEmail || e.email || 'Unknown'); }
+        for (const e of events) {
+            const key = staffKey(e);
+            if (!staff.has(key)) staff.set(key, {name:staffName(e), dr:0, login:0, logout:0, other:0});
+            const row = staff.get(key);
+            if (e.action === 'DR_SAVED') {
+                row.dr++;
+                const day = dashboardDate(e);
+                const dailyKey = day + '\u0001' + key;
+                if (!daily.has(dailyKey)) daily.set(dailyKey, {day, name:staffName(e), count:0});
+                daily.get(dailyKey).count++;
+            } else if (e.action === 'LOGIN') row.login++;
+            else if (e.action === 'LOGOUT') row.logout++;
+            else row.other++;
+        }
+        document.getElementById('dashDr').textContent = drs.length;
+        document.getElementById('dashLogin').textContent = events.filter(e => e.action === 'LOGIN').length;
+        document.getElementById('dashLogout').textContent = events.filter(e => e.action === 'LOGOUT').length;
+        document.getElementById('dashStaff').textContent = [...staff.values()].filter(s => s.dr > 0).length;
+        status.textContent = `Showing ${events.length} of ${activityEvents.length} loaded activities${from || to ? ' within selected dates' : ''}. Data may be limited by backend retention and response limits.`;
+        function fillTable(id, rows, cols) {
+            const body = document.getElementById(id);
+            body.replaceChildren();
+            if (!rows.length) { const tr = document.createElement('tr'); const td = document.createElement('td'); td.colSpan = cols.length; td.textContent = 'No matching records.'; tr.append(td); body.append(tr); return; }
+            for (const item of rows) {
+                const tr = document.createElement('tr');
+                for (const col of cols) { const td = document.createElement('td'); td.textContent = String(item[col] ?? ''); tr.append(td); }
+                body.append(tr);
+            }
+        }
+        fillTable('dashDailyRows', [...daily.values()].sort((a,b) => b.day.localeCompare(a.day) || a.name.localeCompare(b.name)), ['day','name','count']);
+        fillTable('dashStaffRows', [...staff.values()].sort((a,b) => b.dr-a.dr || a.name.localeCompare(b.name)), ['name','dr','login','logout','other']);
+    }
+
     function clearActivityFilters() {
         for (const id of ['activitySearch','activityType','activityFrom','activityTo']) document.getElementById(id).value = '';
         renderActivity();
@@ -1318,10 +1416,12 @@
             for (const action of [...new Set(activityEvents.map(e => e.action).filter(Boolean))].sort()) select.add(new Option(action.replaceAll('_', ' '), action));
             select.value = selected;
             renderActivity();
+            renderActivityDashboard();
         } catch(e) {
             target.textContent = 'Unable to load activity: ' + e.message;
             document.getElementById('activitySummary').textContent = 'Refresh failed; previous records are not shown.';
             activityEvents = [];
+            renderActivityDashboard();
         }
     }
 
