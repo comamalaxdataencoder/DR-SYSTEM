@@ -130,6 +130,12 @@
 
     .admin-content{min-height:220px;padding:22px}.admin-content h3{font-size:19px;margin-bottom:9px}.admin-content p{margin:8px 0 16px}.staff-form{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end;margin:22px 0}.staff-form label{display:grid;gap:7px;font-size:12px;color:#cbd5e1}.staff-form input{background:#0f172a;border:1px solid #475569;color:#fff;padding:11px;border-radius:7px;width:100%}.staff-form button{height:40px}.staff-list>div{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:13px 0;border-bottom:1px solid #334155}.staff-list>div span{flex:1;min-width:210px}.admin-shop-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:16px}.admin-shop-grid>div{background:#0f172a;border:1px solid #334155;border-radius:9px;padding:16px}.admin-shop-grid strong{display:block;font-size:23px;color:#38bdf8;margin-top:9px}
 
+
+    .activity-filters{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:12px;margin-top:16px}
+    .activity-filters label{display:grid;gap:6px;color:#cbd5e1;font-size:12px}
+    .activity-filters input,.activity-filters select{width:100%;min-width:0;background:#0f172a;color:#f8fafc;border:1px solid #475569;border-radius:7px;padding:10px}
+    @media(max-width:900px){.activity-filters{grid-template-columns:1fr 1fr}}
+    @media(max-width:600px){.activity-filters{grid-template-columns:1fr}}
     #adminError{color:#fca5a5}
 
     @media(max-width:900px){.admin-stats{grid-template-columns:repeat(2,1fr)}.staff-form{grid-template-columns:1fr 1fr}}@media(max-width:600px){.admin-stats,.staff-form{grid-template-columns:1fr}.admin-heading{align-items:start;flex-direction:column}}
@@ -192,7 +198,18 @@
 
       <div id="adminRecords" class="card admin-content" hidden><h3>DR Records by Shop</h3><p class="muted">Counts reflect Google Drive after successful synchronization.</p><button class="btn-blue" onclick="adminRefreshCounts()">🔄 Refresh Counts</button><p id="adminCountStatus" class="muted" role="status"></p><div id="adminShopCounts" class="admin-shop-grid"></div></div>
 
-      <div id="adminActivity" class="card admin-content" hidden><h3>Recent Activity</h3><p class="muted">Server-recorded login, logout, DR saving, staff management and password reset requests.</p><button class="btn-blue" onclick="loadActivity()">🔄 Refresh Activity</button><div id="activityList" class="staff-list"></div></div>
+      <div id="adminActivity" class="card admin-content" hidden>
+        <h3>Recent Activity</h3><p class="muted">Server-recorded login, logout, DR saving, staff management and password reset requests.</p>
+        <div class="activity-filters">
+          <label>Search staff, DR, shop or activity<input id="activitySearch" type="search" placeholder="Search records..." oninput="renderActivity()"></label>
+          <label>Activity<select id="activityType" onchange="renderActivity()"><option value="">All activities</option></select></label>
+          <label>From date<input id="activityFrom" type="date" onchange="renderActivity()"></label>
+          <label>To date<input id="activityTo" type="date" onchange="renderActivity()"></label>
+        </div>
+        <div class="actions" style="margin:12px 0"><button class="btn-blue" onclick="loadActivity()">🔄 Refresh Activity</button><button class="btn-green" onclick="exportActivityCSV()">📥 Export to Excel (CSV)</button><button class="btn-indigo" onclick="clearActivityFilters()">Clear Filters</button></div>
+        <p id="activitySummary" class="muted" role="status"></p>
+        <div id="activityList" class="staff-list"></div>
+      </div>
 
       <div id="adminSettings" class="card admin-content" hidden>
 
@@ -1225,18 +1242,87 @@
 
     }
 
+    let activityEvents = [];
+
+    function filteredActivity() {
+        const search = document.getElementById('activitySearch').value.trim().toLowerCase();
+        const type = document.getElementById('activityType').value;
+        const from = document.getElementById('activityFrom').value;
+        const to = document.getElementById('activityTo').value;
+        return activityEvents.filter(event => {
+            const fields = [event.actorName, event.name, event.actorEmail, event.email, event.action, event.drNumber, event.shop, event.targetName, event.targetEmail, event.uid].map(v => String(v || '')).join(' ').toLowerCase();
+            if (search && !fields.includes(search)) return false;
+            if (type && event.action !== type) return false;
+            if (from || to) {
+                const date = new Date(event.at);
+                if (Number.isNaN(date.getTime())) return false;
+                const localDate = [date.getFullYear(), String(date.getMonth()+1).padStart(2,'0'), String(date.getDate()).padStart(2,'0')].join('-');
+                if (from && localDate < from) return false;
+                if (to && localDate > to) return false;
+            }
+            return true;
+        });
+    }
+
+    function renderActivity() {
+        const target = document.getElementById('activityList');
+        const events = filteredActivity();
+        target.replaceChildren();
+        document.getElementById('activitySummary').textContent = `Showing ${events.length} of ${activityEvents.length} loaded activities`;
+        if (!events.length) { target.textContent = 'No matching activity records.'; return; }
+        for (const event of events) {
+            const div = document.createElement('div');
+            const line = document.createElement('span');
+            line.textContent = (event.actorName || event.name || 'Staff') + ' • ' + (event.action || 'action') + (event.drNumber ? ' • DR # ' + event.drNumber : '') + (event.shop ? ' • ' + event.shop : '') + (event.targetName ? ' • ' + event.targetName : '');
+            const time = document.createElement('small');
+            time.textContent = event.at ? new Date(event.at).toLocaleString() : '';
+            div.append(line, time);
+            target.append(div);
+        }
+    }
+
+    function clearActivityFilters() {
+        for (const id of ['activitySearch','activityType','activityFrom','activityTo']) document.getElementById(id).value = '';
+        renderActivity();
+    }
+
+    function exportActivityCSV() {
+        const events = filteredActivity();
+        if (!events.length) { alert('No activity records to export.'); return; }
+        const rows = [['Date and Time', 'Staff Name', 'Email', 'Activity', 'DR Number', 'Shop', 'Target Staff', 'Target Email'], ...events.map(e => [e.at ? new Date(e.at).toLocaleString('en-PH') : '', e.actorName || e.name || '', e.actorEmail || e.email || '', e.action || '', e.drNumber || '', e.shop || '', e.targetName || '', e.targetEmail || ''])];
+        const escapeCell = value => {
+            let text = String(value ?? '');
+            // Avoid spreadsheet formula injection in exported user-controlled values.
+            if (/^[\s]*[=+@-]/.test(text)) text = "'" + text;
+            return '"' + text.replace(/"/g, '""') + '"';
+        };
+        const csv = '\uFEFF' + rows.map(row => row.map(escapeCell).join(',')).join('\r\n');
+        const url = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8;'}));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'I-JIN_Activity_Logs_' + new Date().toISOString().slice(0,10) + '.csv';
+        document.body.appendChild(link); link.click(); link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
     async function loadActivity() {
-
-        const target=document.getElementById('activityList');
-
-        try {const r=await api('/api/admin/activity');target.replaceChildren();document.getElementById('activityCount').textContent=r.events.length;
-
-            if(!r.events.length)target.textContent='No recorded activity yet.';
-
-            for(const event of r.events){const div=document.createElement('div');const line=document.createElement('span');line.textContent=(event.actorName||event.name||'Staff')+' • '+(event.action||'action')+(event.drNumber?' • DR # '+event.drNumber:'')+(event.shop?' • '+event.shop:'')+(event.targetName?' • '+event.targetName:'');const time=document.createElement('small');time.textContent=event.at?new Date(event.at).toLocaleString():'';div.append(line,time);target.append(div)}
-
-        }catch(e){target.textContent='Unable to load activity: '+e.message}
-
+        const target = document.getElementById('activityList');
+        target.textContent = 'Loading activity...';
+        try {
+            const r = await api('/api/admin/activity');
+            activityEvents = Array.isArray(r.events) ? r.events : [];
+            document.getElementById('activityCount').textContent = activityEvents.length;
+            const select = document.getElementById('activityType');
+            const selected = select.value;
+            select.replaceChildren(new Option('All activities', ''));
+            for (const action of [...new Set(activityEvents.map(e => e.action).filter(Boolean))].sort()) select.add(new Option(action.replaceAll('_', ' '), action));
+            select.value = selected;
+            renderActivity();
+        } catch(e) {
+            target.textContent = 'Unable to load activity: ' + e.message;
+            document.getElementById('activitySummary').textContent = 'Refresh failed; previous records are not shown.';
+            activityEvents = [];
+        }
     }
 
     function staffRow(staff) {
