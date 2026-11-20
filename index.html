@@ -493,7 +493,7 @@
     }
     async function syncGoogleDriveHistory() {
         const btn = document.getElementById('syncDriveBtn'); btn.disabled = true;
-        try { const result = await api('/api/counts'); driveCounts = result.counts; renderShopGallery(); alert('Drive counts updated successfully.'); }
+        try { const result = await api('/api/counts'); driveCounts = Object.fromEntries((result.shops || []).filter(x => Number.isInteger(x.count)).map(x => [x.shop, x.count])); renderShopGallery(); alert('Drive counts updated successfully.'); }
         catch(e) {alert('Sync failed: ' + e.message)} finally {btn.disabled=false}
     }
     async function openGoogleShopFolder(shopName) {
@@ -507,14 +507,14 @@
         if (!data.shopSelect || !String(data.drNo).trim() || !data.items.some(i => String(i.Item_Code || i.Description || '').trim())) {
             alert('Please select a shop, enter DR number and at least one item.'); return;
         }
-        const btn = document.querySelector('.btn-green'); btn.disabled=true;
+        const btn = document.querySelector('button[onclick="saveOnlyToGoogleDrive()"]'); btn.disabled=true;
         try {
-            const result = await api('/api/receipts', {method:'POST', body:JSON.stringify({deliveryReceipt:data})});
+            const result = await api('/api/receipts', {method:'POST', body:JSON.stringify({...data, shop: data.shopSelect, drNumber: String(data.drNo).trim()})});
             const history = JSON.parse(localStorage.getItem('ijin_dr_history') || '[]');
             history.unshift({savedAt:new Date().toISOString(),data,destination:data.shopSelect,driveFileId:result.fileId});
             localStorage.setItem('ijin_dr_history',JSON.stringify(history.slice(0,500)));
-            driveCounts = result.counts; renderShopGallery();
-            alert('Saved to company Google Drive!\nFile: ' + result.filename);
+            await syncGoogleDriveHistory();
+            alert('Saved to company Google Drive!\nFile: ' + result.name);
         } catch(e) {alert('Save failed: ' + e.message)} finally {btn.disabled=false}
     }
     async function logoutStaff() { if(firebaseAuth) await firebaseModules.signOut(firebaseAuth); }
