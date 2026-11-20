@@ -192,7 +192,7 @@
 
       <div id="adminRecords" class="card admin-content" hidden><h3>DR Records by Shop</h3><p class="muted">Counts reflect Google Drive after successful synchronization.</p><button class="btn-blue" onclick="adminRefreshCounts()">🔄 Refresh Counts</button><p id="adminCountStatus" class="muted" role="status"></p><div id="adminShopCounts" class="admin-shop-grid"></div></div>
 
-      <div id="adminActivity" class="card admin-content" hidden><h3>Recent Activity</h3><p class="muted">Server-recorded DR creation and updates.</p><button class="btn-blue" onclick="loadActivity()">🔄 Refresh Activity</button><div id="activityList" class="staff-list"></div></div>
+      <div id="adminActivity" class="card admin-content" hidden><h3>Recent Activity</h3><p class="muted">Server-recorded login, logout, DR saving, staff management and password reset requests.</p><button class="btn-blue" onclick="loadActivity()">🔄 Refresh Activity</button><div id="activityList" class="staff-list"></div></div>
 
       <div id="adminSettings" class="card admin-content" hidden>
 
@@ -1082,7 +1082,12 @@
 
     }
 
-    async function logoutStaff() { if(firebaseAuth) await firebaseModules.signOut(firebaseAuth); }
+    async function logoutStaff() {
+        if (!firebaseAuth) return;
+        try { await api('/api/activity/session', {method:'POST', body:JSON.stringify({action:'LOGOUT'})}); }
+        catch (error) { console.warn('Logout activity not recorded:', error.message); }
+        await firebaseModules.signOut(firebaseAuth);
+    }
 
     let userRole = null;
 
@@ -1228,7 +1233,7 @@
 
             if(!r.events.length)target.textContent='No recorded activity yet.';
 
-            for(const event of r.events){const div=document.createElement('div');const line=document.createElement('span');line.textContent=(event.actorName||'Staff')+' • '+(event.action||'action')+' • '+(event.drNumber||'')+' • '+(event.shop||'');const time=document.createElement('small');time.textContent=event.at?new Date(event.at).toLocaleString():'';div.append(line,time);target.append(div)}
+            for(const event of r.events){const div=document.createElement('div');const line=document.createElement('span');line.textContent=(event.actorName||event.name||'Staff')+' • '+(event.action||'action')+(event.drNumber?' • DR # '+event.drNumber:'')+(event.shop?' • '+event.shop:'')+(event.targetName?' • '+event.targetName:'');const time=document.createElement('small');time.textContent=event.at?new Date(event.at).toLocaleString():'';div.append(line,time);target.append(div)}
 
         }catch(e){target.textContent='Unable to load activity: '+e.message}
 
@@ -1408,7 +1413,11 @@
 
             document.getElementById('loginForm').addEventListener('submit',async e=>{e.preventDefault();
 
-                try{await auth.signInWithEmailAndPassword(firebaseAuth,document.getElementById('loginEmail').value,document.getElementById('loginPassword').value)}
+                try{
+                    await auth.signInWithEmailAndPassword(firebaseAuth,document.getElementById('loginEmail').value,document.getElementById('loginPassword').value);
+                    try { await api('/api/activity/session', {method:'POST', body:JSON.stringify({action:'LOGIN'})}); }
+                    catch (logError) { console.warn('Login activity not recorded:', logError.message); }
+                }
 
                 catch(err){document.getElementById('authError').textContent='Login failed: '+err.message+''}
 
