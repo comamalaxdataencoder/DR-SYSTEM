@@ -94,7 +94,7 @@
       <div class="admin-stats"><div class="stat"><span>Account capacity</span><strong>10</strong><small>1 Admin + 9 Staff</small></div><div class="stat"><span>Active staff</span><strong id="activeStaffCount">—</strong><small>Maximum 9</small></div><div class="stat"><span>DR files in Drive</span><strong id="totalDrCount">—</strong><small>From synced shop folders</small></div><div class="stat"><span>Recent activity</span><strong id="activityCount">—</strong><small>Latest recorded events</small></div></div>
       <div class="admin-tabs"><button id="tabStaff" class="selected" onclick="showAdminTab('staff')">👥 Staff Management</button><button id="tabRecords" onclick="showAdminTab('records')">📁 DR Records</button><button id="tabActivity" onclick="showAdminTab('activity')">🕒 Activity Logs</button><button id="tabSettings" onclick="showAdminTab('settings')">⚙️ Settings</button></div>
       <div id="adminStaff" class="card admin-content"><h3>Staff Accounts</h3><p class="muted">Staff accounts are managed through the secure Cloudflare backend. Up to 9 active staff accounts.</p><form id="staffForm" class="staff-form"><label>Full name<input id="staffName" placeholder="Staff full name" required></label><label>Work email<input id="staffEmail" type="email" placeholder="staff@company.com" required></label><label>Temporary password<input id="staffPassword" type="password" minlength="12" placeholder="At least 12 characters" required></label><button id="addStaffBtn" class="btn-green" type="submit">+ Add Staff</button></form><p id="adminError" role="alert"></p><button type="button" class="btn-blue" onclick="loadStaff()">↻ Refresh Staff List</button><div id="staffList" class="staff-list"></div></div>
-      <div id="adminRecords" class="card admin-content" hidden><h3>DR Records by Shop</h3><p class="muted">Counts reflect Google Drive after successful synchronization.</p><button class="btn-blue" onclick="adminRefreshCounts()">🔄 Refresh Counts</button><div id="adminShopCounts" class="admin-shop-grid"></div></div>
+      <div id="adminRecords" class="card admin-content" hidden><h3>DR Records by Shop</h3><p class="muted">Counts reflect Google Drive after successful synchronization.</p><button class="btn-blue" onclick="adminRefreshCounts()">🔄 Refresh Counts</button><p id="adminCountStatus" class="muted" role="status"></p><div id="adminShopCounts" class="admin-shop-grid"></div></div>
       <div id="adminActivity" class="card admin-content" hidden><h3>Recent Activity</h3><p class="muted">Server-recorded DR creation and updates.</p><button class="btn-blue" onclick="loadActivity()">🔄 Refresh Activity</button><div id="activityList" class="staff-list"></div></div>
       <div id="adminSettings" class="card admin-content" hidden>
         <h3>System Settings</h3>
@@ -491,10 +491,33 @@
         if (!res.ok) throw new Error(data.error || data.message || 'Server error (' + res.status + ')');
         return data;
     }
-    async function syncGoogleDriveHistory() {
-        const btn = document.getElementById('syncDriveBtn'); btn.disabled = true;
-        try { const result = await api('/api/counts'); driveCounts = Object.fromEntries((result.shops || []).filter(x => Number.isInteger(x.count)).map(x => [x.shop, x.count])); renderShopGallery(); alert('Drive counts updated successfully.'); }
-        catch(e) {alert('Sync failed: ' + e.message)} finally {btn.disabled=false}
+    function applyDriveCounts(result) {
+        if (!Array.isArray(result.shops)) throw new Error('Unexpected counts response from backend.');
+        driveCounts = Object.fromEntries(result.shops.filter(x => Number.isInteger(x.count)).map(x => [x.shop, x.count]));
+        renderShopGallery();
+        const total = document.getElementById('totalDrCount');
+        if (total) total.textContent = result.shops.some(x => x.error) ? '—' : String(result.total ?? Object.values(driveCounts).reduce((a,b)=>a+b,0));
+        const grid = document.getElementById('adminShopCounts');
+        if (grid) {
+            grid.replaceChildren();
+            for (const item of result.shops) {
+                const card = document.createElement('div');
+                const label = document.createElement('span'); label.textContent = item.shop;
+                const num = document.createElement('strong');
+                num.textContent = item.error ? 'Error: '+item.error : item.count+' DR file(s)'+(item.partial?' (partial)':'');
+                const view = document.createElement('button'); view.type='button'; view.className='btn-blue'; view.textContent='View DR History';
+                view.addEventListener('click',()=>openHistoryModal(item.shop));
+                card.append(label,num,view);grid.append(card);
+            }
+        }
+        const status=document.getElementById('adminCountStatus');
+        if(status) status.textContent = result.shops.some(x=>x.error) ? 'Some shop folders could not be counted. See errors below.' : 'Counts synced from Google Drive.'+(result.partial?' Some counts may be partial.':'');
+    }
+    async function syncGoogleDriveHistory(silent=false) {
+        const btn = document.getElementById('syncDriveBtn'); if(btn)btn.disabled=true;
+        try {const result=await api('/api/counts');applyDriveCounts(result);if(!silent)alert('Drive counts updated successfully.');return true;}
+        catch(e){if(!silent)alert('Sync failed: '+e.message);return false;}
+        finally{if(btn)btn.disabled=false;}
     }
     async function openGoogleShopFolder(shopName) {
         const popup = window.open('about:blank', '_blank');
@@ -513,7 +536,7 @@
             const history = JSON.parse(localStorage.getItem('ijin_dr_history') || '[]');
             history.unshift({savedAt:new Date().toISOString(),data,destination:data.shopSelect,driveFileId:result.fileId});
             localStorage.setItem('ijin_dr_history',JSON.stringify(history.slice(0,500)));
-            await syncGoogleDriveHistory();
+            await syncGoogleDriveHistory(true);
             alert('Saved to company Google Drive!\nFile: ' + result.name);
         } catch(e) {alert('Save failed: ' + e.message)} finally {btn.disabled=false}
     }
@@ -582,11 +605,9 @@
     }
 
     async function adminRefreshCounts() {
-        try {const r=await api('/api/counts');driveCounts=r.counts;renderShopGallery();
-            document.getElementById('totalDrCount').textContent=Object.values(r.counts).reduce((a,b)=>a+Number(b||0),0);
-            const grid=document.getElementById('adminShopCounts');grid.replaceChildren();
-            for(const [shop,count] of Object.entries(r.counts)){const div=document.createElement('div');const label=document.createElement('span');label.textContent=shop;const num=document.createElement('strong');num.textContent=count+' records';div.append(label,num);grid.append(div)}
-        }catch(e){document.getElementById('adminShopCounts').textContent='Unable to load counts: '+e.message}
+        const status=document.getElementById('adminCountStatus');if(status)status.textContent='Loading Drive counts…';
+        const ok=await syncGoogleDriveHistory(true);
+        if(!ok&&status)status.textContent='Unable to sync counts. Check Google Drive connection and backend.';
     }
     async function loadActivity() {
         const target=document.getElementById('activityList');
@@ -693,7 +714,7 @@
                     const profile=snap.data();
                     if(profile.active!==true)throw new Error('Your account is not active. Contact Admin.');
                     if(!['admin','staff'].includes(profile.role))throw new Error('Account role is not configured.');
-                    document.getElementById('signedInAs').textContent=(profile.displayName||user.email)+' ('+profile.role+')';userRole=profile.role;document.getElementById('authOverlay').hidden=true;document.getElementById('appShell').hidden=false;if(profile.role==='admin')showAdminWindow();else showEncodingWindow()}
+                    document.getElementById('signedInAs').textContent=(profile.displayName||user.email)+' ('+profile.role+')';userRole=profile.role;document.getElementById('authOverlay').hidden=true;document.getElementById('appShell').hidden=false;if(profile.role==='admin')showAdminWindow();else showEncodingWindow();syncGoogleDriveHistory(true)}
                     catch(e){document.getElementById('authError').textContent=e.message;document.getElementById('authOverlay').hidden=false;document.getElementById('appShell').hidden=true}}
             });
         } catch(e){document.getElementById('authError').textContent='Unable to initialize sign-in: '+e.message}
@@ -735,22 +756,46 @@
         autoSaveDraft();
     }
 
-    // --- VIEW LOCAL SAVE HISTORY ---
-    function openHistoryModal() {
-        const history = JSON.parse(localStorage.getItem('ijin_dr_history') || '[]');
-        if (!history.length) {
-            alert('No local save history yet.');
-            return;
+    // --- GOOGLE DRIVE HISTORY (SHARED ACROSS DEVICES) ---
+    async function openHistoryModal(preselectedShop='') {
+        let overlay=document.getElementById('driveHistoryOverlay');
+        if(!overlay){
+            overlay=document.createElement('div');overlay.id='driveHistoryOverlay';
+            overlay.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;padding:16px';
+            const panel=document.createElement('section');panel.style.cssText='background:#1e293b;color:white;border:1px solid #475569;border-radius:14px;width:min(850px,100%);max-height:90vh;overflow:auto;padding:22px';
+            const header=document.createElement('div');header.style.cssText='display:flex;justify-content:space-between;gap:10px;align-items:center';
+            const heading=document.createElement('h2');heading.textContent='Google Drive DR History';
+            const close=document.createElement('button');close.textContent='✕ Close';close.className='btn-red';close.onclick=()=>overlay.remove();header.append(heading,close);
+            const help=document.createElement('p');help.textContent='Live files saved in company Google Drive. Open any record in Drive.';help.style.color='#cbd5e1';
+            const picker=document.createElement('select');picker.id='driveHistoryShop';picker.style.cssText='width:100%;padding:12px;margin:12px 0;background:#0f172a;color:white;border:1px solid #64748b;border-radius:8px';
+            for(const shop of Object.keys(shopBranches)){const option=document.createElement('option');option.value=shop;option.textContent=shop;picker.append(option)}
+            const state=document.createElement('p');state.id='driveHistoryState';state.setAttribute('role','status');
+            const results=document.createElement('div');results.id='driveHistoryResults';
+            picker.onchange=()=>loadDriveHistory(picker.value);
+            panel.append(header,help,picker,state,results);overlay.append(panel);document.body.append(overlay);
+            overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.remove()});
         }
-        const lines = history.slice(0, 30).map((entry, index) => {
-            const d = entry.data || {};
-            return (index + 1) + '. ' + (d.drNo || 'No DR number') +
-                ' | ' + (d.shopSelect || entry.destination || 'No shop') +
-                ' | ' + (d.deliverTo || 'No branch') +
-                ' | ' + (entry.savedAt ? new Date(entry.savedAt).toLocaleString() : '');
-        });
-        alert('LOCAL SAVE HISTORY (latest 30)\n\n' + lines.join('\n') +
-            '\n\nNote: This is browser history of submitted save requests, not a verified Google Drive file list.');
+        const selected=preselectedShop || document.getElementById('shopSelect').value || Object.keys(shopBranches)[0];
+        document.getElementById('driveHistoryShop').value=selected;
+        await loadDriveHistory(selected);
+    }
+    async function loadDriveHistory(shop) {
+        const state=document.getElementById('driveHistoryState'),results=document.getElementById('driveHistoryResults');
+        if(!state||!results)return;state.textContent='Loading records from Google Drive…';results.replaceChildren();
+        try {
+            const data=await api('/api/receipts?shop='+encodeURIComponent(shop));
+            const files=Array.isArray(data.files)?data.files:[];
+            state.textContent=files.length+' file(s) in '+shop+(data.partial?' — only first 1,000 shown':'');
+            if(!files.length){results.textContent='No saved DR files in this shop yet.';return;}
+            for(const file of files){
+                const row=document.createElement('div');row.style.cssText='display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid #475569';
+                const info=document.createElement('div');const name=document.createElement('strong');name.textContent=file.name||'Unnamed file';
+                const date=document.createElement('div');date.style.color='#94a3b8';date.style.fontSize='12px';date.textContent=file.createdTime?new Date(file.createdTime).toLocaleString():'';
+                info.append(name,date);const link=document.createElement('a');link.textContent='📂 Open in Drive';link.target='_blank';link.rel='noopener noreferrer';link.style.cssText='color:#38bdf8;font-weight:bold';
+                link.href='https://drive.google.com/file/d/'+encodeURIComponent(file.id)+'/view';
+                row.append(info,link);results.append(row);
+            }
+        }catch(e){state.textContent='Unable to load Google Drive history: '+e.message;}
     }
 
     // --- PRINT / SAVE AS PDF ---
