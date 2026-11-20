@@ -1,15 +1,1324 @@
-I-JIN DR SYSTEM — REFRESH DASHBOARD FIX
+<!DOCTYPE html>
 
-STEP 1 — FIND this exact button in index.html:
-<button type="button" class="btn-blue" onclick="loadActivity()">🔄 Refresh Dashboard</button>
+<html lang="en">
 
-REPLACE WITH:
-<button type="button" id="refreshDashboardBtn" class="btn-blue" onclick="refreshDashboard()">🔄 Refresh Dashboard</button>
+<head>
 
-STEP 2 — FIND this function:
-    function clearDashboardDates() {
+    <meta charset="UTF-8">
 
-PASTE the following NEW function IMMEDIATELY BEFORE it:
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>I-JIN International Inc. - Delivery Receipt System</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha384-VtK5m8Q0S3B3zHq3+7K5Z6w5L5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5" crossorigin="anonymous"></script>
+
+    <style>
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+
+        body { background-color: #0f172a; color: #f8fafc; padding: 20px; }
+
+        .container { max-width: 1400px; margin: 0 auto; }
+
+        header { display: flex; justify-content: space-between; align-items: center; background-color: #1e293b; padding: 15px 20px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #334155; flex-wrap: wrap; gap: 10px; }
+
+        .brand h1 { font-size: 22px; color: #38bdf8; font-weight: 800; }
+
+        .brand p { font-size: 11px; color: #94a3b8; }
+
+        .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+        button, .file-upload-btn { padding: 8px 14px; border-radius: 6px; border: none; font-weight: 600; cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; gap: 5px; text-decoration: none; }
+
+        .btn-green { background-color: #047857; color: white; } 
+
+        .btn-indigo { background-color: #4338ca; color: white; }
+
+        .btn-red { background-color: #b91c1c; color: white; }
+
+        .btn-teal { background-color: #0f766e; color: white; }
+
+        .btn-orange { background-color: #b45309; color: white; }
+
+        .btn-blue { background-color: #0369a1; color: white; }
+
+
+
+        .gallery-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; margin-bottom: 25px; }
+
+        .shop-card { background: linear-gradient(135deg, #fde68a 0%, #f59e0b 100%); border-radius: 12px; overflow: hidden; cursor: pointer; border: 1px solid #d97706; display: flex; flex-direction: column; justify-content: space-between; transition: transform 0.2s; }
+
+        .shop-card:hover { transform: translateY(-4px); }
+
+        .shop-card-header { padding: 25px 20px; text-align: center; background-color: rgba(255, 255, 255, 0.2); }
+
+        .shop-card-header h3 { color: #1e293b; font-size: 18px; font-weight: 800; text-transform: uppercase; }
+
+        .shop-card-footer { background-color: #1e293b; padding: 12px 15px; color: #38bdf8; font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; border-top: 1px solid #334155; }
+
+
+
+        .card { background-color: #1e293b; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #334155; }
+
+        .card-title { font-size: 13px; text-transform: uppercase; color: #94a3b8; margin-bottom: 10px; display: flex; justify-content: space-between; }
+
+        .excel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+
+        .field-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+
+        .field-table th, .field-table td { padding: 6px 10px; border: 1px solid #334155; }
+
+        .field-table td.field-name { font-weight: 600; color: #cbd5e1; width: 35%; background-color: #1e293b; }
+
+        .field-table td input, .field-table td select { width: 100%; padding: 4px 8px; background-color: #0f172a; border: 1px solid #334155; border-radius: 4px; color: white; font-size: 12px; }
+
+        .table-responsive { overflow-x: auto; margin-top: 10px; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 11px; }
+
+        th { background-color: #0f172a; color: #cbd5e1; padding: 6px; border: 1px solid #334155; text-align: center; }
+
+        td { padding: 4px 6px; border: 1px solid #334155; text-align: center; vertical-align: middle; }
+
+        td input { width: 100%; background: transparent; border: 1px solid transparent; color: inherit; font-size: 11px; text-align: center; }
+
+        td textarea.item-desc { width: 100%; background: transparent; border: 1px solid transparent; color: inherit; font-size: 11px; text-align: left; resize: none; overflow: hidden; min-height: 24px; line-height: 1.3; }
+
+        .btn-add { margin-top: 8px; background-color: #334155; color: white; padding: 6px 12px; font-size: 12px; cursor: pointer; border: none; border-radius: 4px; }
+
+        .btn-del { background-color: #b91c1c; color: white; padding: 2px 6px; font-size: 10px; cursor: pointer; border: none; border-radius: 4px; }
+
+        button:disabled { opacity: .65; cursor: wait; }
+
+        .shop-drive-link { width: 100%; padding: 10px; border: 1px solid #0891b2; background: #123047; color: #e0f2fe; cursor: pointer; font-weight: 600; }
+
+        .shop-drive-link:hover { background: #155e75; }
+
+        @media print {
+
+            body { background: #fff; color: #000; padding: 0; }
+
+            .actions, #galleryDashboard, .btn-add, .btn-del { display: none !important; }
+
+            .card, header { background: #fff; color: #000; border: 1px solid #999; box-shadow: none; }
+
+            .brand h1, .brand p, .card-title, .field-table td.field-name { color: #000; }
+
+            input, select, textarea { color: #000 !important; }
+
+        }
+
+        .shop-card-footer .shop-drive-link { background: none; border: 0; color: #38bdf8; font: inherit; font-weight: 600; cursor: pointer; padding: 0; }
+
+    .shop-card-footer .shop-drive-link:hover { text-decoration: underline; }
+
+
+
+    [hidden] {display:none !important}
+
+    #authOverlay {min-height:calc(100vh - 40px);display:flex;align-items:center;justify-content:center}
+
+    .auth-card {width:min(430px,100%);padding:32px;border-radius:16px;background:#1e293b;border:1px solid #334155;box-shadow:0 15px 50px #0005}
+
+    .auth-card form {display:grid;gap:12px;margin-top:22px}.auth-card input {padding:13px;border:1px solid #475569;border-radius:8px;background:#0f172a;color:#fff;width:100%}.auth-card button{justify-content:center;padding:13px}
+
+    .admin-heading{display:flex;justify-content:space-between;align-items:center;gap:18px;margin:22px 0}.admin-heading h2{font-size:28px;color:#f8fafc}.admin-heading p{color:#94a3b8;margin-top:6px}.admin-heading .eyebrow{font-size:11px;letter-spacing:2px;color:#38bdf8;font-weight:700}
+
+    .admin-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:18px 0}.stat{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:8px}.stat span,.stat small,.muted{color:#94a3b8}.stat strong{font-size:30px;color:#38bdf8}
+
+    .admin-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 12px}.admin-tabs button{background:#1e293b;color:#cbd5e1;border:1px solid #334155}.admin-tabs button.selected{background:#0369a1;color:#fff}
+
+    .admin-content{min-height:220px;padding:22px}.admin-content h3{font-size:19px;margin-bottom:9px}.admin-content p{margin:8px 0 16px}.staff-form{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end;margin:22px 0}.staff-form label{display:grid;gap:7px;font-size:12px;color:#cbd5e1}.staff-form input{background:#0f172a;border:1px solid #475569;color:#fff;padding:11px;border-radius:7px;width:100%}.staff-form button{height:40px}.staff-list>div{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:13px 0;border-bottom:1px solid #334155}.staff-list>div span{flex:1;min-width:210px}.admin-shop-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:16px}.admin-shop-grid>div{background:#0f172a;border:1px solid #334155;border-radius:9px;padding:16px}.admin-shop-grid strong{display:block;font-size:23px;color:#38bdf8;margin-top:9px}
+
+
+    .activity-filters{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:12px;margin-top:16px}
+    .activity-filters label{display:grid;gap:6px;color:#cbd5e1;font-size:12px}
+    .activity-filters input,.activity-filters select{width:100%;min-width:0;background:#0f172a;color:#f8fafc;border:1px solid #475569;border-radius:7px;padding:10px}
+    @media(max-width:900px){.activity-filters{grid-template-columns:1fr 1fr}}
+    @media(max-width:600px){.activity-filters{grid-template-columns:1fr}}
+    .dash-filters{display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin:16px 0}
+    .dash-filters label{display:grid;gap:6px;color:#cbd5e1;font-size:12px}
+    .dash-filters input{background:#0f172a;color:#fff;border:1px solid #475569;border-radius:7px;padding:10px}
+    .dash-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:16px 0}
+    .dash-stats>div{background:#0f172a;border:1px solid #334155;border-radius:10px;padding:16px}
+    .dash-stats span{display:block;color:#94a3b8;font-size:12px}.dash-stats strong{display:block;font-size:27px;color:#38bdf8;margin-top:8px}
+    .dash-table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}
+    .dash-table th,.dash-table td{padding:12px;border-bottom:1px solid #334155;text-align:left}
+    .dash-table th{color:#cbd5e1}.dash-table td{color:#f8fafc}
+    @media(max-width:750px){.dash-stats{grid-template-columns:repeat(2,1fr)}}
+    #adminError{color:#fca5a5}
+
+    @media(max-width:900px){.admin-stats{grid-template-columns:repeat(2,1fr)}.staff-form{grid-template-columns:1fr 1fr}}@media(max-width:600px){.admin-stats,.staff-form{grid-template-columns:1fr}.admin-heading{align-items:start;flex-direction:column}}
+
+</style>
+
+
+
+</head>
+
+<body>
+
+
+
+<div id="authOverlay"><div class="auth-card"><h2 style="color:#38bdf8">I-JIN DR SYSTEM</h2><p style="margin:10px 0">Staff / Admin Sign In</p><form id="loginForm"><input id="loginEmail" type="email" placeholder="Work email" autocomplete="username" required><input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password" required><button type="submit" class="btn-blue">Sign In</button></form><p id="authError" role="alert" style="margin-top:12px"></p></div></div>
+
+<div class="container" id="appShell" hidden>
+
+    <header>
+
+        <div class="brand">
+
+            <h1>I-JIN INTERNATIONAL</h1>
+
+            <p>Delivery Receipt & Google Drive Sync System</p>
+
+        </div>
+
+        <div class="actions"><span id="signedInAs" style="font-size:12px;color:#cbd5e1"></span><button id="adminBtn" class="btn-indigo" hidden onclick="showAdminWindow()">🛡️ Admin Dashboard</button><button id="encodingBtn" class="btn-blue" hidden onclick="showEncodingWindow()">📋 DR Encoding</button><button class="btn-red" onclick="logoutStaff()">Log Out</button>
+
+            <button class="dr-action btn-red" onclick="clearDraft()">🗑️ New / Clear</button>
+
+            <button class="dr-action btn-indigo" onclick="openHistoryModal()">📜 View History</button>
+
+            <button class="dr-action btn-teal" onclick="saveAsFile()">💾 Save JSON File</button>
+
+            <button class="dr-action btn-green" onclick="saveOnlyToGoogleDrive()">☁️ Save to Google Drive</button>
+
+            <button class="dr-action btn-indigo" id="syncDriveBtn" onclick="syncGoogleDriveHistory()">🔄 Sync Drive & History</button>
+
+            <button class="dr-action btn-orange" onclick="exportToCSV()">📥 Export CSV (Manual)</button>
+
+            <button class="dr-action btn-blue" onclick="printReceipt()">🖨️ Print / PDF</button>
+
+        </div>
+
+    </header>
+
+
+
+    <section id="adminWindow" hidden aria-label="Administrator dashboard">
+
+      <div class="admin-heading"><div><p class="eyebrow">ADMINISTRATOR CONTROL CENTER</p><h2>Admin Dashboard</h2><p>Manage authorized users and monitor Delivery Receipt activity.</p></div><button class="btn-blue" onclick="showEncodingWindow()">Open DR Encoding →</button></div>
+
+      <div class="admin-stats"><div class="stat"><span>Account capacity</span><strong>10</strong><small>1 Admin + 9 Staff</small></div><div class="stat"><span>Active staff</span><strong id="activeStaffCount">—</strong><small>Maximum 9</small></div><div class="stat"><span>DR files in Drive</span><strong id="totalDrCount">—</strong><small>From synced shop folders</small></div><div class="stat"><span>Recent activity</span><strong id="activityCount">—</strong><small>Latest recorded events</small></div></div>
+
+      <div class="admin-tabs"><button id="tabStaff" class="selected" onclick="showAdminTab('staff')">👥 Staff Management</button><button id="tabRecords" onclick="showAdminTab('records')">📁 DR Records</button><button id="tabActivity" onclick="showAdminTab('activity')">🕒 Activity Logs</button><button id="tabDashboard" onclick="showAdminTab('dashboard')">📊 Activity Dashboard</button><button id="tabSettings" onclick="showAdminTab('settings')">⚙️ Settings</button></div>
+
+      <div id="adminStaff" class="card admin-content"><h3>Staff Accounts</h3><p class="muted">Staff accounts are managed through the secure Cloudflare backend. Up to 9 active staff accounts.</p><form id="staffForm" class="staff-form"><label>Full name<input id="staffName" placeholder="Staff full name" required></label><label>Work email<input id="staffEmail" type="email" placeholder="staff\@company.com" required></label><label>Temporary password<input id="staffPassword" type="password" minlength="12" placeholder="At least 12 characters" required></label><button id="addStaffBtn" class="btn-green" type="submit">+ Add Staff</button></form><p id="adminError" role="alert"></p><button type="button" class="btn-blue" onclick="loadStaff()">↻ Refresh Staff List</button><div id="staffList" class="staff-list"></div></div>
+
+      <div id="adminRecords" class="card admin-content" hidden><h3>DR Records by Shop</h3><p class="muted">Counts reflect Google Drive after successful synchronization.</p><button class="btn-blue" onclick="adminRefreshCounts()">🔄 Refresh Counts</button><p id="adminCountStatus" class="muted" role="status"></p><div id="adminShopCounts" class="admin-shop-grid"></div></div>
+
+      <div id="adminActivity" class="card admin-content" hidden>
+        <h3>Recent Activity</h3><p class="muted">Server-recorded login, logout, DR saving, staff management and password reset requests.</p>
+        <div class="activity-filters">
+          <label>Search staff, DR, shop or activity<input id="activitySearch" type="search" placeholder="Search records..." oninput="renderActivity()"></label>
+          <label>Activity<select id="activityType" onchange="renderActivity()"><option value="">All activities</option></select></label>
+          <label>From date<input id="activityFrom" type="date" onchange="renderActivity()"></label>
+          <label>To date<input id="activityTo" type="date" onchange="renderActivity()"></label>
+        </div>
+        <div class="actions" style="margin:12px 0"><button class="btn-blue" onclick="loadActivity()">🔄 Refresh Activity</button><button class="btn-green" onclick="exportActivityCSV()">📥 Export to Excel (CSV)</button><button class="btn-indigo" onclick="clearActivityFilters()">Clear Filters</button></div>
+        <p id="activitySummary" class="muted" role="status"></p>
+        <div id="activityList" class="staff-list"></div>
+      </div>
+
+      <div id="adminDashboard" class="card admin-content" hidden>
+        <h3>Activity Dashboard</h3>
+        <p class="muted">Summary of server-recorded events currently loaded from the backend. DR counts are based on DR_SAVED events, not the total files in Drive.</p>
+        <div class="dash-filters">
+          <label>From date<input id="dashFrom" type="date" onchange="renderActivityDashboard()"></label>
+          <label>To date<input id="dashTo" type="date" onchange="renderActivityDashboard()"></label>
+          <button type="button" class="btn-indigo" onclick="clearDashboardDates()">Clear Dates</button>
+          <button type="button" id="refreshDashboardBtn" class="btn-blue" onclick="refreshDashboard()">🔄 Refresh Dashboard</button>
+        </div>
+        <p id="dashStatus" class="muted" role="status"></p>
+        <div class="dash-stats">
+          <div><span>DR Saved</span><strong id="dashDr">0</strong></div>
+          <div><span>Logins</span><strong id="dashLogin">0</strong></div>
+          <div><span>Logouts</span><strong id="dashLogout">0</strong></div>
+          <div><span>Staff who saved DR</span><strong id="dashStaff">0</strong></div>
+        </div>
+        <h3>DR Saved by Staff and Day</h3>
+        <div class="table-responsive"><table class="dash-table"><thead><tr><th>Date</th><th>Staff</th><th>DR Saved</th></tr></thead><tbody id="dashDailyRows"></tbody></table></div>
+        <h3 style="margin-top:24px">Staff Activity Summary</h3>
+        <div class="table-responsive"><table class="dash-table"><thead><tr><th>Staff</th><th>DR Saved</th><th>Logins</th><th>Logouts</th><th>Other Events</th></tr></thead><tbody id="dashStaffRows"></tbody></table></div>
+      </div>
+
+      <div id="adminSettings" class="card admin-content" hidden>
+
+        <h3>System Settings</h3>
+
+        <p>Company Google Drive is managed through the secure Cloudflare backend. No Google passwords, client secrets, or refresh tokens are stored in this website.</p>
+
+        <div class="card" style="margin-top:18px">
+
+          <h3>Google Drive Connection</h3>
+
+          <p id="driveConnectionStatus" role="status" aria-live="polite" class="muted">Connection status has not been checked.</p>
+
+          <div class="actions" style="margin:14px 0">
+
+            <button type="button" class="btn-blue" id="driveConnectBtn" onclick="connectCompanyDrive()">🔗 Connect Google Drive</button>
+
+            <button type="button" class="btn-teal" id="driveCheckBtn" onclick="checkCompanyDrive()">🔄 Check Connection</button>
+
+          </div>
+
+          <p class="muted">The backend must implement <code>/api/google/status</code> and <code>/api/google/connect</code>. Connecting authorizes the company Drive account, not each staff member.</p>
+
+        </div>
+
+        <p>Staff capacity: 9 active staff. Administrator: 1.</p>
+
+      </div>
+
+    </section>
+
+    <div id="encodingWindow" hidden>
+
+    <!-- GALLERY VIEW DASHBOARD -->
+
+    <div id="galleryDashboard" class="card">
+
+        <div class="card-title">
+
+            <span>Retail Partners / Shop Gallery View</span>
+
+            <span style="color: #38bdf8;">Pumili ng shop para sa DR encoding</span>
+
+        </div>
+
+        <div class="gallery-container" id="shopGalleryGrid"></div>
+
+    </div>
+
+
+
+    <div class="card">
+
+        <div class="card-title">Header & Logistics Metadata</div>
+
+        <div class="excel-grid">
+
+            <table class="field-table">
+
+                <tr>
+
+                    <td class="field-name">Approved:</td>
+
+                    <td>
+
+                        <select id="approvedStatus" onchange="autoSaveDraft()">
+
+                            <option value="APPROVED FOR DELIVERY" selected>APPROVED FOR DELIVERY</option>
+
+                            <option value="FOR APPROVAL">FOR APPROVAL</option>
+
+                            <option value="WILL DELIVER W/O APPROVAL">WILL DELIVER W/O APPROVAL</option>
+
+                        </select>
+
+                    </td>
+
+                </tr>
+
+                <tr>
+
+                    <td class="field-name">STATUS:</td>
+
+                    <td>
+
+                        <select id="mainStatus" onchange="autoSaveDraft()">
+
+                            <option value="DELIVERED" selected>DELIVERED</option>
+
+                            <option value="PREPARING">PREPARING</option>
+
+                            <option value="CHECKED">CHECKED</option>
+
+                            <option value="PENDING DELIVER">PENDING DELIVER</option>
+
+                        </select>
+
+                    </td>
+
+                </tr>
+
+                <tr>
+
+                    <td class="field-name">JEN STATUS:</td>
+
+                    <td>
+
+                        <select id="jenStatus" onchange="autoSaveDraft()">
+
+                            <option value="DONE OUTBOUND" selected>DONE OUTBOUND</option>
+
+                            <option value="PENDING">PENDING</option>
+
+                        </select>
+
+                    </td>
+
+                </tr>
+
+                <tr>
+
+                    <td class="field-name">SIR STATUS:</td>
+
+                    <td>
+
+                        <select id="sirStatus" onchange="autoSaveDraft()">
+
+                            <option value="PENDING" selected>PENDING</option>
+
+                            <option value="CONFIRM">CONFIRM</option>
+
+                        </select>
+
+                    </td>
+
+                </tr>
+
+                <tr>
+
+                    <td class="field-name">Prepared by:</td>
+
+                    <td><input type="text" id="preparedBy" value="CHADY" oninput="autoSaveDraft()"></td>
+
+                </tr>
+
+                <tr>
+
+                    <td class="field-name">Check by:</td>
+
+                    <td><input type="text" id="checkBy" value="JEN" oninput="autoSaveDraft()"></td>
+
+                </tr>
+
+                <tr>
+
+                    <td class="field-name">Received by:</td>
+
+                    <td><input type="text" id="receivedBy" value="STORE PERSONNEL" oninput="autoSaveDraft()"></td>
+
+                </tr>
+
+                <tr>
+
+                    <td class="field-name">Delivered:</td>
+
+                    <td><input type="text" id="deliveredBy" value="AARON" oninput="autoSaveDraft()"></td>
+
+                </tr>
+
+            </table>
+
+
+
+            <table class="field-table">
+
+                <tr>
+
+                    <td class="field-name">Date of Delivery:</td>
+
+                    <td><input type="text" id="deliveryDate" oninput="autoSaveDraft()"></td>
+
+                </tr>
+
+                <tr>
+
+                    <td class="field-name">DR #:</td>
+
+                    <td><input type="text" id="drNo" oninput="autoSaveDraft()"></td>
+
+                </tr>
+
+                <tr>
+
+                    <td class="field-name">Delivery Schedule:</td>
+
+                    <td><input type="text" id="deliverySchedule" oninput="autoSaveDraft()"></td>
+
+                </tr>
+
+                <tr>
+
+                    <td class="field-name">Total Qty of Boxes:</td>
+
+                    <td><input type="number" id="totalBoxes" oninput="autoSaveDraft()"></td>
+
+                </tr>
+
+                <tr>
+
+                    <td class="field-name">Total Value:</td>
+
+                    <td><input type="text" id="totalValueDisplay" value="₱0.00" readonly></td>
+
+                </tr>
+
+                <tr>
+
+                    <td class="field-name">Store Code:</td>
+
+                    <td><input type="text" id="storeCode" oninput="autoSaveDraft()"></td>
+
+                </tr>
+
+                <tr>
+
+                    <td class="field-name">Shop :</td>
+
+                    <td>
+
+                        <select id="shopSelect" onchange="updateDeliverToBranches(); autoSaveDraft();">
+
+                            <option value="">-- Select Shop --</option>
+
+                            <option value="Watsons, SM Beauty, Look">Watsons, SM Beauty, Look</option>
+
+                            <option value="Landers">Landers</option>
+
+                            <option value="Landmark">Landmark</option>
+
+                            <option value="Mitsukoshi">Mitsukoshi</option>
+
+                            <option value="Metro Gaisano">Metro Gaisano</option>
+
+                            <option value="Robinsons">Robinsons</option>
+
+                        </select>
+
+                    </td>
+
+                </tr>
+
+                <tr>
+
+                    <td class="field-name">Deliver To :</td>
+
+                    <td><input type="text" id="deliverTo" list="branchList" placeholder="Select branch..." oninput="autoSaveDraft()">
+
+                        <datalist id="branchList"></datalist>
+
+                    </td>
+
+                </tr>
+
+            </table>
+
+        </div>
+
+    </div>
+
+
+
+    <div class="card">
+
+        <div class="card-title">Line Items</div>
+
+        <div class="table-responsive">
+
+            <table id="itemsTable">
+
+                <thead>
+
+                    <tr>
+
+                        <th>Item Code</th>
+
+                        <th>Item Description</th>
+
+                        <th>Qty</th>
+
+                        <th>Unit Price</th>
+
+                        <th>Final Amount</th>
+
+                        <th>Remarks</th>
+
+                        <th>Action</th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody id="itemsBody"></tbody>
+
+            </table>
+
+        </div>
+
+        <button class="btn-add" onclick="addRow()">+ Add Item</button>
+
+    </div>
+
+    </div><!-- /encodingWindow -->
+
+</div>
+
+
+
+<script>
+
+    const shopBranches = {
+
+        "Watsons, SM Beauty, Look": ["WATSONS SHANGRI LA MALL 3 MANDALUYONG (6977) (COSRX,SKIN1004,MEDICUBE,ISOI)", "Gateway Mall 2", "SM North Edsa", "SM Mall of Asia"],
+
+        "Landers": ["Landers Balintawak", "Landers Otis", "Landers Alabang"],
+
+        "Landmark": ["Landmark Makati", "Landmark Trinoma"],
+
+        "Mitsukoshi": ["Mitsukoshi BGC"],
+
+        "Metro Gaisano": ["Metro Market Market"],
+
+        "Robinsons": ["Robinsons Galleria", "Robinsons Magnolia"]
+
+    };
+
+
+
+    const productMasterList = {
+
+        "141": { desc: "AHA/BHA Clarifying Treatment Toner 150ml", price: 710 },
+
+        "00141": { desc: "AHA/BHA Clarifying Treatment Toner 150ml", price: 710 },
+
+        "143": { desc: "Advanced Snail 96 Mucin Power Essence 100ml", price: 950 },
+
+        "00143": { desc: "Advanced Snail 96 Mucin Power Essence 100ml", price: 950 },
+
+        "145": { desc: "Aloe Soothing Sun Cream SPF50 PA+++ 50ml", price: 720 },
+
+        "00145": { desc: "Aloe Soothing Sun Cream SPF50 PA+++ 50ml", price: 720 },
+
+        "148": { desc: "Oil Free Ultra Moisturizing Lotion 100ml", price: 1070 },
+
+        "00148": { desc: "Oil Free Ultra Moisturizing Lotion 100ml", price: 1070 },
+
+        "11976": { desc: "Salicylic Acid Daily Gentle Cleanser 150ml", price: 560 },
+
+        "150": { desc: "BHA Blackhead Power Liquid 100ml", price: 1050 },
+
+        "00150": { desc: "BHA Blackhead Power Liquid 100ml", price: 1050 },
+
+        "152": { desc: "Advanced Snail 92 All in one Cream 100ml", price: 1070 },
+
+        "00152": { desc: "Advanced Snail 92 All in one Cream 100ml", price: 1070 },
+
+        "756": { desc: "Low pH Good Morning Gel Cleanser 150ml", price: 560 },
+
+        "00756": { desc: "Low pH Good Morning Gel Cleanser 150ml", price: 560 },
+
+        "1486": { desc: "Acne Pimple Master Patch [24 patches]", price: 200 },
+
+        "01486": { desc: "Acne Pimple Master Patch [24 patches]", price: 200 },
+
+        "2333": { desc: "AC Collection Calming Foam Cleanser 150ml", price: 730 },
+
+        "02333": { desc: "AC Collection Calming Foam Cleanser 150ml", price: 730 }
+
+    };
+
+
+
+    function lookupItem(inputElement) {
+
+        let row = inputElement.closest('tr');
+
+        let code = inputElement.value.trim();
+
+
+
+        if (productMasterList[code]) {
+
+            let item = productMasterList[code];
+
+            let descArea = row.querySelector('.item-desc');
+
+            descArea.value = item.desc;
+
+            autoResize(descArea);
+
+
+
+            row.querySelector('.item-price').value = item.price;
+
+            calculateTotals();
+
+        }
+
+    }
+
+
+
+    function autoResize(textarea) {
+
+        textarea.style.height = 'auto';
+
+        textarea.style.height = textarea.scrollHeight + 'px';
+
+    }
+
+
+
+    let driveCounts = null;
+
+    function renderShopGallery() {
+
+        let grid = document.getElementById('shopGalleryGrid');
+
+        grid.innerHTML = '';
+
+        Object.keys(shopBranches).forEach(shopName => {
+
+            const cloudCount = driveCounts == null ? undefined : driveCounts[shopName];
+
+            const countLabel = Number.isInteger(cloudCount) ? cloudCount + ' Drive Records' : 'Drive count not synced';
+
+            let card = document.createElement('div');
+
+            card.className = 'shop-card';
+
+            card.onclick = () => selectShopFromGallery(shopName);
+
+            card.innerHTML = `
+
+                <div class="shop-card-header"><h3>${shopName}</h3></div>
+
+                <div class="shop-card-footer"><span>${countLabel}</span><button type="button" class="shop-drive-link" title="Open this shop folder in Google Drive">📂 Open</button></div>
+
+            `;
+
+            card.querySelector('.shop-drive-link').addEventListener('click', (event) => {
+
+                event.stopPropagation();
+
+                openGoogleShopFolder(shopName);
+
+            });
+
+            grid.appendChild(card);
+
+        });
+
+    }
+
+
+
+    function selectShopFromGallery(shopName) {
+
+        document.getElementById('shopSelect').value = shopName;
+
+        updateDeliverToBranches();
+
+        autoSaveDraft();
+
+    }
+
+
+
+    function updateDeliverToBranches() {
+
+        let shop = document.getElementById('shopSelect').value;
+
+        let dataList = document.getElementById('branchList');
+
+        dataList.innerHTML = '';
+
+        if (shopBranches[shop]) {
+
+            shopBranches[shop].forEach(branch => {
+
+                let opt = document.createElement('option');
+
+                opt.value = branch;
+
+                dataList.appendChild(opt);
+
+            });
+
+        }
+
+    }
+
+
+
+    function addRow(data = {}) {
+
+        let tbody = document.getElementById('itemsBody');
+
+        let tr = document.createElement('tr');
+
+
+
+        let code = data.Item_Code ? String(data.Item_Code).trim() : '';
+
+        let desc = data.Description || '';
+
+        let price = data.Unit_Price !== undefined ? data.Unit_Price : 0;
+
+        let qty = data.Qty !== undefined ? data.Qty : 1;
+
+
+
+        if (code && productMasterList[code] && !data.Description) {
+
+            let master = productMasterList[code];
+
+            desc = master.desc;
+
+            price = master.price;
+
+        }
+
+
+
+        tr.innerHTML = `
+
+            <td><input type="text" class="item-code" value="${code}" oninput="lookupItem(this); autoSaveDraft();"></td>
+
+            <td><textarea class="item-desc" oninput="autoResize(this); autoSaveDraft();">${desc}</textarea></td>
+
+            <td><input type="number" class="item-qty" value="${qty}" oninput="calculateTotals()"></td>
+
+            <td><input type="number" class="item-price" value="${price}" oninput="calculateTotals()"></td>
+
+            <td><input type="number" class="item-amount" value="${data.Final_Amount || '0.00'}" readonly></td>
+
+            <td><input type="text" class="item-remarks" value="${data.Remarks || 'NO ISSUES'}" oninput="autoSaveDraft()"></td>
+
+            <td><button class="btn-del" onclick="deleteRow(this)">Remove</button></td>
+
+        `;
+
+        tbody.appendChild(tr);
+
+
+
+        let newTextarea = tr.querySelector('.item-desc');
+
+        autoResize(newTextarea);
+
+        calculateTotals();
+
+    }
+
+
+
+    function deleteRow(btn) {
+
+        btn.closest('tr').remove();
+
+        calculateTotals();
+
+    }
+
+
+
+    function calculateTotals() {
+
+        let rows = document.querySelectorAll('#itemsBody tr');
+
+        let grandTotal = 0;
+
+        rows.forEach(row => {
+
+            let qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+
+            let price = parseFloat(row.querySelector('.item-price').value) || 0;
+
+            let amount = qty * price;
+
+            row.querySelector('.item-amount').value = amount.toFixed(2);
+
+            grandTotal += amount;
+
+        });
+
+        let formattedTotal = '₱ ' + grandTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        document.getElementById('totalValueDisplay').value = formattedTotal;
+
+        autoSaveDraft();
+
+    }
+
+
+
+    function getFormData() {
+
+        let formData = {
+
+            approvedStatus: document.getElementById('approvedStatus').value,
+
+            mainStatus: document.getElementById('mainStatus').value,
+
+            jenStatus: document.getElementById('jenStatus').value,
+
+            sirStatus: document.getElementById('sirStatus').value,
+
+            preparedBy: document.getElementById('preparedBy').value,
+
+            checkBy: document.getElementById('checkBy').value,
+
+            receivedBy: document.getElementById('receivedBy').value,
+
+            deliveredBy: document.getElementById('deliveredBy').value,
+
+            deliveryDate: document.getElementById('deliveryDate').value,
+
+            drNo: document.getElementById('drNo').value,
+
+            deliverySchedule: document.getElementById('deliverySchedule').value,
+
+            totalBoxes: document.getElementById('totalBoxes').value,
+
+            storeCode: document.getElementById('storeCode').value,
+
+            shopSelect: document.getElementById('shopSelect').value,
+
+            deliverTo: document.getElementById('deliverTo').value,
+
+            items: []
+
+        };
+
+        document.querySelectorAll('#itemsBody tr').forEach(row => {
+
+            formData.items.push({
+
+                Item_Code: row.querySelector('.item-code').value,
+
+                Description: row.querySelector('.item-desc').value,
+
+                Qty: row.querySelector('.item-qty').value,
+
+                Unit_Price: row.querySelector('.item-price').value,
+
+                Final_Amount: row.querySelector('.item-amount').value,
+
+                Remarks: row.querySelector('.item-remarks').value
+
+            });
+
+        });
+
+        return formData;
+
+    }
+
+
+
+    function autoSaveDraft() {
+
+        localStorage.setItem('ijin_dr_draft', JSON.stringify(getFormData()));
+
+    }
+
+
+
+    function loadDraft() {
+
+        let saved = localStorage.getItem('ijin_dr_draft');
+
+        if (saved) {
+
+            let data = JSON.parse(saved);
+
+            document.getElementById('approvedStatus').value = data.approvedStatus || '';
+
+            document.getElementById('mainStatus').value = data.mainStatus || '';
+
+            document.getElementById('jenStatus').value = data.jenStatus || '';
+
+            document.getElementById('sirStatus').value = data.sirStatus || '';
+
+            document.getElementById('preparedBy').value = data.preparedBy || '';
+
+            document.getElementById('checkBy').value = data.checkBy || '';
+
+            document.getElementById('receivedBy').value = data.receivedBy || '';
+
+            document.getElementById('deliveredBy').value = data.deliveredBy || '';
+
+            document.getElementById('deliveryDate').value = data.deliveryDate || '';
+
+            document.getElementById('drNo').value = data.drNo || '';
+
+            document.getElementById('deliverySchedule').value = data.deliverySchedule || '';
+
+            document.getElementById('totalBoxes').value = data.totalBoxes || '';
+
+            document.getElementById('storeCode').value = data.storeCode || '';
+
+            if (data.shopSelect) {
+
+                document.getElementById('shopSelect').value = data.shopSelect;
+
+                updateDeliverToBranches();
+
+            }
+
+            document.getElementById('deliverTo').value = data.deliverTo || '';
+
+            if (data.items && data.items.length > 0) {
+
+                document.getElementById('itemsBody').innerHTML = '';
+
+                data.items.forEach(item => addRow(item));
+
+                document.querySelectorAll('.item-desc').forEach(ta => autoResize(ta));
+
+                return;
+
+            }
+
+        }
+
+        addRow();
+
+    }
+
+
+
+    // Authenticated backend. Never put Google refresh tokens or staff passwords in GitHub HTML.
+
+    const API_BASE = "https://ijin-dr-backend.comamalaxdataencoder.workers.dev";
+
+    const FIREBASE_CONFIG = {
+
+        apiKey: "AIzaSyAo0W5NvwMtfANcDYLeTuaybhapahNbSGs",
+
+        authDomain: "i-jin-dr-system-926e3.firebaseapp.com",
+
+        projectId: "i-jin-dr-system-926e3",
+
+        storageBucket: "i-jin-dr-system-926e3.firebasestorage.app",
+
+        messagingSenderId: "40333944130",
+
+        appId: "1:40333944130:web:7e1fe9b735e527651a54db",
+
+        measurementId: "G-BP3X49QTBN"
+
+    };
+
+    let authUser = null;
+
+    let firebaseAuth = null;
+
+    let firebaseModules = null;
+
+    let firestoreDb = null;
+
+    let firestoreModules = null;
+
+    async function api(path, options = {}) {
+
+        if (!authUser) throw new Error('Please sign in.');
+
+        if (API_BASE.includes('YOUR-BACKEND')) throw new Error('Backend not configured yet. Follow SETUP.md.');
+
+        const token = await authUser.getIdToken();
+
+        const res = await fetch(API_BASE + path, {...options, headers: {'Authorization': 'Bearer ' + token, 'Content-Type':'application/json', ...(options.headers || {})}});
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) throw new Error(data.error || data.message || 'Server error (' + res.status + ')');
+
+        return data;
+
+    }
+
+    function applyDriveCounts(result) {
+
+        if (!Array.isArray(result.shops)) throw new Error('Unexpected counts response from backend.');
+
+        driveCounts = Object.fromEntries(result.shops.filter(x => Number.isInteger(x.count)).map(x => [x.shop, x.count]));
+
+        renderShopGallery();
+
+        const total = document.getElementById('totalDrCount');
+
+        if (total) total.textContent = result.shops.some(x => x.error) ? '—' : String(result.total ?? Object.values(driveCounts).reduce((a,b)=>a+b,0));
+
+        const grid = document.getElementById('adminShopCounts');
+
+        if (grid) {
+
+            grid.replaceChildren();
+
+            for (const item of result.shops) {
+
+                const card = document.createElement('div');
+
+                const label = document.createElement('span'); label.textContent = item.shop;
+
+                const num = document.createElement('strong');
+
+                num.textContent = item.error ? 'Error: '+item.error : item.count+' DR file(s)'+(item.partial?' (partial)':'');
+
+                const view = document.createElement('button'); view.type='button'; view.className='btn-blue'; view.textContent='View DR History';
+
+                view.addEventListener('click',()=>openHistoryModal(item.shop));
+
+                card.append(label,num,view);grid.append(card);
+
+            }
+
+        }
+
+        const status=document.getElementById('adminCountStatus');
+
+        if(status) status.textContent = result.shops.some(x=>x.error) ? 'Some shop folders could not be counted. See errors below.' : 'Counts synced from Google Drive.'+(result.partial?' Some counts may be partial.':'');
+
+    }
+
+    async function syncGoogleDriveHistory(silent=false) {
+
+        const btn = document.getElementById('syncDriveBtn'); if(btn)btn.disabled=true;
+
+        try {const result=await api('/api/counts');applyDriveCounts(result);if(!silent)alert('Drive counts updated successfully.');return true;}
+
+        catch(e){if(!silent)alert('Sync failed: '+e.message);return false;}
+
+        finally{if(btn)btn.disabled=false;}
+
+    }
+
+    async function openGoogleShopFolder(shopName) {
+
+        const popup = window.open('about:blank', '_blank');
+
+        if (!popup) {alert('Allow pop-ups for this website.'); return;}
+
+        try { const result = await api('/api/folder?shop=' + encodeURIComponent(shopName)); popup.location.href = result.url; }
+
+        catch(e) {popup.close();alert('Unable to open folder: ' + e.message)}
+
+    }
+
+    async function saveOnlyToGoogleDrive() {
+
+        const data = getFormData();
+
+        if (!data.shopSelect || !String(data.drNo).trim() || !data.items.some(i => String(i.Item_Code || i.Description || '').trim())) {
+
+            alert('Please select a shop, enter DR number and at least one item.'); return;
+
+        }
+
+        const btn = document.querySelector('button[onclick="saveOnlyToGoogleDrive()"]'); btn.disabled=true;
+
+        try {
+
+            const result = await api('/api/receipts', {method:'POST', body:JSON.stringify({...data, shop: data.shopSelect, drNumber: String(data.drNo).trim()})});
+
+            const history = JSON.parse(localStorage.getItem('ijin_dr_history') || '[]');
+
+            history.unshift({savedAt:new Date().toISOString(),data,destination:data.shopSelect,driveFileId:result.fileId});
+
+            localStorage.setItem('ijin_dr_history',JSON.stringify(history.slice(0,500)));
+
+            await syncGoogleDriveHistory(true);
+
+            alert('Saved to company Google Drive!\nFile: ' + result.name);
+
+        } catch(e) {alert('Save failed: ' + e.message)} finally {btn.disabled=false}
+
+    }
+
+    async function logoutStaff() {
+        if (!firebaseAuth) return;
+        try { await api('/api/activity/session', {method:'POST', body:JSON.stringify({action:'LOGOUT'})}); }
+        catch (error) { console.warn('Logout activity not recorded:', error.message); }
+        await firebaseModules.signOut(firebaseAuth);
+    }
+
+    let userRole = null;
+
+    function showAdminWindow() {
+
+        if (userRole !== 'admin') return;
+
+        document.getElementById('adminWindow').hidden = false;
+
+        document.getElementById('encodingWindow').hidden = true;
+
+        document.querySelectorAll('.dr-action').forEach(b => b.hidden = true);
+
+        document.getElementById('adminBtn').hidden = true;
+
+        document.getElementById('encodingBtn').hidden = false;
+
+        showAdminTab('staff');loadStaff();
+
+    }
+
+    function showEncodingWindow() {
+
+        document.getElementById('adminWindow').hidden = true;
+
+        document.getElementById('encodingWindow').hidden = false;
+
+        document.querySelectorAll('.dr-action').forEach(b => b.hidden = false);
+
+        document.getElementById('adminBtn').hidden = userRole !== 'admin';
+
+        document.getElementById('encodingBtn').hidden = true;
+
+    }
+
+    function showAdminTab(tab) {
+
+        for (const key of ['staff','records','activity','dashboard','settings']) {
+
+            document.getElementById('admin'+key[0].toUpperCase()+key.slice(1)).hidden = key !== tab;
+
+            document.getElementById('tab'+key[0].toUpperCase()+key.slice(1)).classList.toggle('selected',key===tab);
+
+        }
+
+        if (tab === 'settings') checkCompanyDrive();
+        if (tab === 'dashboard') { renderActivityDashboard(); loadActivity(); }
+
+    }
+
+    // The Google OAuth flow must be initiated and completed by the secure backend.
+
+    // No OAuth client secret or refresh token belongs in this public GitHub HTML.
+
+    async function checkCompanyDrive() {
+
+        const status = document.getElementById('driveConnectionStatus');
+
+        const btn = document.getElementById('driveCheckBtn');
+
+        if (userRole !== 'admin') return;
+
+        btn.disabled = true;
+
+        status.textContent = 'Checking company Google Drive connection…';
+
+        try {
+
+            const result = await api('/api/google/status');
+
+            const connected = result.connected === true;
+
+            status.textContent = connected
+
+                ? '✅ Google Drive connected' + (result.email ? ' as ' + result.email : '') + '.'
+
+                : '⚠️ Google Drive is not connected yet.';
+
+            document.getElementById('driveConnectBtn').textContent = connected ? '🔄 Reconnect Google Drive' : '🔗 Connect Google Drive';
+
+        } catch (e) {
+
+            status.textContent = '⚠️ Unable to check Google Drive: ' + e.message + '. Confirm the backend Google OAuth routes are deployed.';
+
+        } finally { btn.disabled = false; }
+
+    }
+
+    async function connectCompanyDrive() {
+
+        if (userRole !== 'admin') return;
+
+        const btn = document.getElementById('driveConnectBtn');
+
+        const status = document.getElementById('driveConnectionStatus');
+
+        btn.disabled = true;
+
+        status.textContent = 'Requesting a secure Google authorization link…';
+
+        try {
+
+            // This must return {url: "https://accounts.google.com/..."} after
+
+            // server-side admin verification and OAuth state/PKCE protection.
+
+            const result = await api('/api/google/connect');
+
+            const url = new URL(result.url);
+
+            if (url.protocol !== 'https:' || url.hostname !== 'accounts.google.com')
+
+                throw new Error('Backend did not return a valid Google authorization URL.');
+
+            status.textContent = 'Opening Google authorization. After approving, return here and click Check Connection.';
+
+            window.location.assign(url.href);
+
+        } catch (e) {
+
+            status.textContent = '⚠️ Cannot start Google authorization: ' + e.message + '. The backend OAuth route must be deployed first.';
+
+        } finally { btn.disabled = false; }
+
+    }
+
+
+
+    async function adminRefreshCounts() {
+
+        const status=document.getElementById('adminCountStatus');if(status)status.textContent='Loading Drive counts…';
+
+        const ok=await syncGoogleDriveHistory(true);
+
+        if(!ok&&status)status.textContent='Unable to sync counts. Check Google Drive connection and backend.';
+
+    }
+
+    let activityEvents = [];
+
+    function filteredActivity() {
+        const search = document.getElementById('activitySearch').value.trim().toLowerCase();
+        const type = document.getElementById('activityType').value;
+        const from = document.getElementById('activityFrom').value;
+        const to = document.getElementById('activityTo').value;
+        return activityEvents.filter(event => {
+            const fields = [event.actorName, event.name, event.actorEmail, event.email, event.action, event.drNumber, event.shop, event.targetName, event.targetEmail, event.uid].map(v => String(v || '')).join(' ').toLowerCase();
+            if (search && !fields.includes(search)) return false;
+            if (type && event.action !== type) return false;
+            if (from || to) {
+                const date = new Date(event.at);
+                if (Number.isNaN(date.getTime())) return false;
+                const localDate = [date.getFullYear(), String(date.getMonth()+1).padStart(2,'0'), String(date.getDate()).padStart(2,'0')].join('-');
+                if (from && localDate < from) return false;
+                if (to && localDate > to) return false;
+            }
+            return true;
+        });
+    }
+
+    function renderActivity() {
+        const target = document.getElementById('activityList');
+        const events = filteredActivity();
+        target.replaceChildren();
+        document.getElementById('activitySummary').textContent = `Showing ${events.length} of ${activityEvents.length} loaded activities`;
+        if (!events.length) { target.textContent = 'No matching activity records.'; return; }
+        for (const event of events) {
+            const div = document.createElement('div');
+            const line = document.createElement('span');
+            line.textContent = (event.actorName || event.name || 'Staff') + ' • ' + (event.action || 'action') + (event.drNumber ? ' • DR # ' + event.drNumber : '') + (event.shop ? ' • ' + event.shop : '') + (event.targetName ? ' • ' + event.targetName : '');
+            const time = document.createElement('small');
+            time.textContent = event.at ? new Date(event.at).toLocaleString() : '';
+            div.append(line, time);
+            target.append(div);
+        }
+    }
+
+    function dashboardDate(event) {
+        const date = new Date(event.at);
+        if (Number.isNaN(date.getTime())) return '';
+        return [date.getFullYear(), String(date.getMonth()+1).padStart(2,'0'), String(date.getDate()).padStart(2,'0')].join('-');
+    }
 
     async function refreshDashboard() {
         const button = document.getElementById('refreshDashboardBtn');
@@ -17,14 +1326,12 @@ PASTE the following NEW function IMMEDIATELY BEFORE it:
         if (button.disabled) return;
         button.disabled = true;
         button.textContent = '⏳ Refreshing...';
-        status.textContent = 'Fetching the latest activity records from the backend...';
+        status.textContent = 'Fetching latest activity records...';
         try {
-            const response = await api('/api/admin/activity');
-            if (!Array.isArray(response.events)) {
-                throw new Error('Unexpected activity response from backend.');
-            }
-            activityEvents = response.events;
-            document.getElementById('activityCount').textContent = activityEvents.length;
+            const result = await api('/api/admin/activity');
+            if (!Array.isArray(result.events)) throw new Error('Invalid activity response.');
+            activityEvents = result.events;
+            document.getElementById('activityCount').textContent = String(activityEvents.length);
             const select = document.getElementById('activityType');
             const selected = select.value;
             select.replaceChildren(new Option('All activities', ''));
@@ -34,8 +1341,8 @@ PASTE the following NEW function IMMEDIATELY BEFORE it:
             select.value = selected;
             renderActivity();
             renderActivityDashboard();
-            const summary = status.textContent;
-            status.textContent = '✅ Dashboard updated successfully at ' + new Date().toLocaleTimeString() + '. ' + summary;
+            const details = status.textContent;
+            status.textContent = '✅ Dashboard updated successfully at ' + new Date().toLocaleTimeString() + '. ' + details;
         } catch (error) {
             status.textContent = '❌ Dashboard refresh failed: ' + error.message;
             console.error('Dashboard refresh failed:', error);
@@ -45,8 +1352,554 @@ PASTE the following NEW function IMMEDIATELY BEFORE it:
         }
     }
 
-STEP 3 — SAVE index.html, commit to GitHub Pages, then hard-refresh the website with Ctrl+F5.
+    function clearDashboardDates() {
+        document.getElementById('dashFrom').value = '';
+        document.getElementById('dashTo').value = '';
+        renderActivityDashboard();
+    }
 
-STEP 4 — Open Activity Dashboard, click Clear Dates, then Refresh Dashboard.
-EXPECTED: button temporarily shows Refreshing... and dashboard status shows Dashboard updated successfully at [time].
-Counts will stay unchanged if the backend has no new events.
+    function renderActivityDashboard() {
+        const from = document.getElementById('dashFrom').value;
+        const to = document.getElementById('dashTo').value;
+        const status = document.getElementById('dashStatus');
+        if (from && to && from > to) {
+            status.textContent = 'From date must be on or before To date.';
+            for (const id of ['dashDr','dashLogin','dashLogout','dashStaff']) document.getElementById(id).textContent = '—';
+            document.getElementById('dashDailyRows').replaceChildren();
+            document.getElementById('dashStaffRows').replaceChildren();
+            return;
+        }
+        const events = activityEvents.filter(e => {
+            const day = dashboardDate(e);
+            return day && (!from || day >= from) && (!to || day <= to);
+        });
+        const drs = events.filter(e => e.action === 'DR_SAVED');
+        const staff = new Map();
+        const daily = new Map();
+        function staffKey(e) { return String(e.uid || e.actorUid || e.actorEmail || e.email || e.actorName || e.name || 'Unknown'); }
+        function staffName(e) { return String(e.actorName || e.name || e.actorEmail || e.email || 'Unknown'); }
+        for (const e of events) {
+            const key = staffKey(e);
+            if (!staff.has(key)) staff.set(key, {name:staffName(e), dr:0, login:0, logout:0, other:0});
+            const row = staff.get(key);
+            if (e.action === 'DR_SAVED') {
+                row.dr++;
+                const day = dashboardDate(e);
+                const dailyKey = day + '\u0001' + key;
+                if (!daily.has(dailyKey)) daily.set(dailyKey, {day, name:staffName(e), count:0});
+                daily.get(dailyKey).count++;
+            } else if (e.action === 'LOGIN') row.login++;
+            else if (e.action === 'LOGOUT') row.logout++;
+            else row.other++;
+        }
+        document.getElementById('dashDr').textContent = drs.length;
+        document.getElementById('dashLogin').textContent = events.filter(e => e.action === 'LOGIN').length;
+        document.getElementById('dashLogout').textContent = events.filter(e => e.action === 'LOGOUT').length;
+        document.getElementById('dashStaff').textContent = [...staff.values()].filter(s => s.dr > 0).length;
+        status.textContent = `Showing ${events.length} of ${activityEvents.length} loaded activities${from || to ? ' within selected dates' : ''}. Data may be limited by backend retention and response limits.`;
+        function fillTable(id, rows, cols) {
+            const body = document.getElementById(id);
+            body.replaceChildren();
+            if (!rows.length) { const tr = document.createElement('tr'); const td = document.createElement('td'); td.colSpan = cols.length; td.textContent = 'No matching records.'; tr.append(td); body.append(tr); return; }
+            for (const item of rows) {
+                const tr = document.createElement('tr');
+                for (const col of cols) { const td = document.createElement('td'); td.textContent = String(item[col] ?? ''); tr.append(td); }
+                body.append(tr);
+            }
+        }
+        fillTable('dashDailyRows', [...daily.values()].sort((a,b) => b.day.localeCompare(a.day) || a.name.localeCompare(b.name)), ['day','name','count']);
+        fillTable('dashStaffRows', [...staff.values()].sort((a,b) => b.dr-a.dr || a.name.localeCompare(b.name)), ['name','dr','login','logout','other']);
+    }
+
+    function clearActivityFilters() {
+        for (const id of ['activitySearch','activityType','activityFrom','activityTo']) document.getElementById(id).value = '';
+        renderActivity();
+    }
+
+    function exportActivityCSV() {
+        const events = filteredActivity();
+        if (!events.length) { alert('No activity records to export.'); return; }
+        const rows = [['Date and Time', 'Staff Name', 'Email', 'Activity', 'DR Number', 'Shop', 'Target Staff', 'Target Email'], ...events.map(e => [e.at ? new Date(e.at).toLocaleString('en-PH') : '', e.actorName || e.name || '', e.actorEmail || e.email || '', e.action || '', e.drNumber || '', e.shop || '', e.targetName || '', e.targetEmail || ''])];
+        const escapeCell = value => {
+            let text = String(value ?? '');
+            // Avoid spreadsheet formula injection in exported user-controlled values.
+            if (/^[\s]*[=+@-]/.test(text)) text = "'" + text;
+            return '"' + text.replace(/"/g, '""') + '"';
+        };
+        const csv = '\uFEFF' + rows.map(row => row.map(escapeCell).join(',')).join('\r\n');
+        const url = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8;'}));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'I-JIN_Activity_Logs_' + new Date().toISOString().slice(0,10) + '.csv';
+        document.body.appendChild(link); link.click(); link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    async function loadActivity() {
+        const target = document.getElementById('activityList');
+        target.textContent = 'Loading activity...';
+        try {
+            const r = await api('/api/admin/activity');
+            activityEvents = Array.isArray(r.events) ? r.events : [];
+            document.getElementById('activityCount').textContent = activityEvents.length;
+            const select = document.getElementById('activityType');
+            const selected = select.value;
+            select.replaceChildren(new Option('All activities', ''));
+            for (const action of [...new Set(activityEvents.map(e => e.action).filter(Boolean))].sort()) select.add(new Option(action.replaceAll('_', ' '), action));
+            select.value = selected;
+            renderActivity();
+            renderActivityDashboard();
+        } catch(e) {
+            target.textContent = 'Unable to load activity: ' + e.message;
+            document.getElementById('activitySummary').textContent = 'Refresh failed; previous records are not shown.';
+            activityEvents = [];
+            renderActivityDashboard();
+        }
+    }
+
+    function staffRow(staff) {
+
+        const row = document.createElement('div');
+
+        const info = document.createElement('span');
+
+        const name = staff.name || staff.displayName || staff.email || 'Staff';
+
+        info.textContent = name + ' — ' + (staff.email || '') + ' — ' + (staff.active ? 'Active' : 'Inactive');
+
+        row.append(info);
+
+        if (staff.uid && staff.uid !== authUser.uid) {
+
+            const toggle = document.createElement('button');
+
+            toggle.className = staff.active ? 'btn-red' : 'btn-green';
+
+            toggle.textContent = staff.active ? 'Deactivate' : 'Activate';
+
+            toggle.addEventListener('click', async () => {
+
+                if (!confirm((staff.active ? 'Deactivate ' : 'Activate ') + name + '?')) return;
+
+                toggle.disabled = true;
+
+                try {
+
+                    await api('/api/admin/staff/' + encodeURIComponent(staff.uid), {
+
+                        method:'PATCH', body:JSON.stringify({active:!staff.active})
+
+                    });
+
+                    await loadStaff();
+
+                } catch (e) { document.getElementById('adminError').textContent=e.message; toggle.disabled=false; }
+
+            });
+
+            row.append(toggle);
+
+            const reset = document.createElement('button');
+
+            reset.className='btn-orange';
+
+            reset.textContent='Reset Password';
+
+            reset.addEventListener('click', async () => {
+
+                if (!confirm('Send a password reset email to ' + (staff.email || name) + '?')) return;
+
+                reset.disabled=true;
+
+                try {
+
+                    await api('/api/admin/staff/' + encodeURIComponent(staff.uid) + '/password', {method:'POST',body:'{}'});
+
+                    alert('Password reset request submitted.');
+
+                } catch(e) { document.getElementById('adminError').textContent=e.message; }
+
+                finally {reset.disabled=false;}
+
+            });
+
+            row.append(reset);
+
+        }
+
+        return row;
+
+    }
+
+    async function loadStaff() {
+
+        const target=document.getElementById('staffList');
+
+        const error=document.getElementById('adminError');
+
+        target.replaceChildren();error.textContent='Loading staff accounts…';
+
+        document.getElementById('activeStaffCount').textContent='—';
+
+        if (userRole !== 'admin') return;
+
+        try {
+
+            const result=await api('/api/admin/staff');
+
+            if (!Array.isArray(result.staff)) throw new Error('Unexpected staff list response.');
+
+            const staff=result.staff.filter(x=>x.role!=='admin');
+
+            const active=staff.filter(x=>x.active===true).length;
+
+            document.getElementById('activeStaffCount').textContent=String(active);
+
+            error.textContent='';
+
+            if (!staff.length) target.textContent='No staff accounts created yet.';
+
+            staff.forEach(x=>target.append(staffRow(x)));
+
+        } catch(e) {
+
+            error.textContent='Staff backend not ready: ' + e.message + '. Deploy the secure /api/admin/staff endpoints first.';
+
+            const snap=await firestoreModules.getDoc(firestoreModules.doc(firestoreDb,'users',authUser.uid)).catch(()=>null);
+
+            if (snap?.exists()) {
+
+                const p=snap.data();const row=document.createElement('div');
+
+                row.textContent=(p.displayName||authUser.email)+' — '+authUser.email+' — '+p.role+' (current account)';
+
+                target.append(row);
+
+            }
+
+        }
+
+    }
+
+    document.getElementById('staffForm').addEventListener('submit',async(e)=>{
+
+        e.preventDefault();
+
+        const error=document.getElementById('adminError');error.textContent='';
+
+        if(userRole!=='admin') {error.textContent='Admin access required.';return;}
+
+        const btn=document.getElementById('addStaffBtn');btn.disabled=true;
+
+        try {
+
+            const name=document.getElementById('staffName').value.trim();
+
+            const email=document.getElementById('staffEmail').value.trim();
+
+            const password=document.getElementById('staffPassword').value;
+
+            if(password.length<12) throw new Error('Password must have at least 12 characters.');
+
+            await api('/api/admin/staff',{method:'POST',body:JSON.stringify({name,email,password})});
+
+            e.target.reset();await loadStaff();alert('Staff account created successfully.');
+
+        } catch(err) {error.textContent='Unable to add staff: '+err.message;}
+
+        finally {btn.disabled=false;}
+
+    });
+
+    async function startAuth() {
+
+        if (!FIREBASE_CONFIG) {document.getElementById('authError').textContent='Firebase configuration missing.';return;}
+
+        try {
+
+            const app=await import('https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js');
+
+            const auth=await import('https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js');
+
+            const firestore=await import('https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js');
+
+            firebaseModules=auth;firestoreModules=firestore;
+
+            const firebaseApp=app.initializeApp(FIREBASE_CONFIG);
+
+            firebaseAuth=auth.getAuth(firebaseApp);firestoreDb=firestore.getFirestore(firebaseApp);
+
+            document.getElementById('loginForm').addEventListener('submit',async e=>{e.preventDefault();
+
+                try{
+                    await auth.signInWithEmailAndPassword(firebaseAuth,document.getElementById('loginEmail').value,document.getElementById('loginPassword').value);
+                    try { await api('/api/activity/session', {method:'POST', body:JSON.stringify({action:'LOGIN'})}); }
+                    catch (logError) { console.warn('Login activity not recorded:', logError.message); }
+                }
+
+                catch(err){document.getElementById('authError').textContent='Login failed: '+err.message+''}
+
+            });
+
+            auth.onAuthStateChanged(firebaseAuth,async user=>{
+
+                authUser=user;document.getElementById('authOverlay').hidden=false;document.getElementById('appShell').hidden=true;document.getElementById('authError').textContent='';
+
+                document.getElementById('adminWindow').hidden=true;document.getElementById('encodingWindow').hidden=true;document.getElementById('adminBtn').hidden=true;document.getElementById('encodingBtn').hidden=true;userRole=null;
+
+                if(user){try{const snap=await firestoreModules.getDoc(firestoreModules.doc(firestoreDb,'users',user.uid));
+
+                    if(!snap.exists())throw new Error('Account has no Firestore user profile. Ask Admin to create users/'+user.uid);
+
+                    const profile=snap.data();
+
+                    if(profile.active!==true)throw new Error('Your account is not active. Contact Admin.');
+
+                    if(!['admin','staff'].includes(profile.role))throw new Error('Account role is not configured.');
+
+                    document.getElementById('signedInAs').textContent=(profile.displayName||user.email)+' ('+profile.role+')';userRole=profile.role;document.getElementById('authOverlay').hidden=true;document.getElementById('appShell').hidden=false;if(profile.role==='admin')showAdminWindow();else showEncodingWindow();syncGoogleDriveHistory(true)}
+
+                    catch(e){document.getElementById('authError').textContent=e.message;document.getElementById('authOverlay').hidden=false;document.getElementById('appShell').hidden=true}}
+
+            });
+
+        } catch(e){document.getElementById('authError').textContent='Unable to initialize sign-in: '+e.message}
+
+    }
+
+    // --- SAVE A LOCAL JSON COPY ---
+
+    function saveAsFile() {
+
+        const data = getFormData();
+
+        const drNo = String(data.drNo || 'Draft').replace(/[**\\\**/:*?"<>|]/g, '_');
+
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+
+        const url = URL.createObjectURL(blob);
+
+        const link = document.createElement('a');
+
+        link.href = url;
+
+        link.download = 'DR_' + drNo + '.json';
+
+        document.body.appendChild(link);
+
+        link.click();
+
+        link.remove();
+
+        URL.revokeObjectURL(url);
+
+    }
+
+
+
+    // --- CLEAR THE CURRENT FORM ---
+
+    function clearDraft() {
+
+        if (!confirm('Start a new DR? Make sure you have saved the current DR first.')) return;
+
+        localStorage.removeItem('ijin_dr_draft');
+
+        document.getElementById('approvedStatus').value = 'APPROVED FOR DELIVERY';
+
+        document.getElementById('mainStatus').value = 'DELIVERED';
+
+        document.getElementById('jenStatus').value = 'DONE OUTBOUND';
+
+        document.getElementById('sirStatus').value = 'PENDING';
+
+        document.getElementById('preparedBy').value = 'CHADY';
+
+        document.getElementById('checkBy').value = 'JEN';
+
+        document.getElementById('receivedBy').value = 'STORE PERSONNEL';
+
+        document.getElementById('deliveredBy').value = 'AARON';
+
+        ['deliveryDate','drNo','deliverySchedule','totalBoxes','storeCode','deliverTo'].forEach(id => {
+
+            document.getElementById(id).value = '';
+
+        });
+
+        document.getElementById('shopSelect').value = '';
+
+        document.getElementById('branchList').innerHTML = '';
+
+        document.getElementById('itemsBody').innerHTML = '';
+
+        addRow();
+
+        autoSaveDraft();
+
+    }
+
+
+
+    // --- GOOGLE DRIVE HISTORY (SHARED ACROSS DEVICES) ---
+
+    async function openHistoryModal(preselectedShop='') {
+
+        let overlay=document.getElementById('driveHistoryOverlay');
+
+        if(!overlay){
+
+            overlay=document.createElement('div');overlay.id='driveHistoryOverlay';
+
+            overlay.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;padding:16px';
+
+            const panel=document.createElement('section');panel.style.cssText='background:#1e293b;color:white;border:1px solid #475569;border-radius:14px;width:min(850px,100%);max-height:90vh;overflow:auto;padding:22px';
+
+            const header=document.createElement('div');header.style.cssText='display:flex;justify-content:space-between;gap:10px;align-items:center';
+
+            const heading=document.createElement('h2');heading.textContent='Google Drive DR History';
+
+            const close=document.createElement('button');close.textContent='✕ Close';close.className='btn-red';close.onclick=()=>overlay.remove();header.append(heading,close);
+
+            const help=document.createElement('p');help.textContent='Live files saved in company Google Drive. Open any record in Drive.';help.style.color='#cbd5e1';
+
+            const picker=document.createElement('select');picker.id='driveHistoryShop';picker.style.cssText='width:100%;padding:12px;margin:12px 0;background:#0f172a;color:white;border:1px solid #64748b;border-radius:8px';
+
+            for(const shop of Object.keys(shopBranches)){const option=document.createElement('option');option.value=shop;option.textContent=shop;picker.append(option)}
+
+            const search=document.createElement('input');search.id='driveHistorySearch';search.type='search';search.placeholder='🔎 Search DR number, filename, or staff name';search.setAttribute('aria-label','Search DR history');search.style.cssText='width:100%;padding:12px;margin:0 0 12px;background:#0f172a;color:white;border:1px solid #64748b;border-radius:8px';search.oninput=()=>filterDriveHistory();
+            const state=document.createElement('p');state.id='driveHistoryState';state.setAttribute('role','status');
+
+            const results=document.createElement('div');results.id='driveHistoryResults';
+
+            picker.onchange=()=>{search.value='';loadDriveHistory(picker.value)};
+
+            panel.append(header,help,picker,search,state,results);overlay.append(panel);document.body.append(overlay);
+
+            overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.remove()});
+
+        }
+
+        const selected=preselectedShop || document.getElementById('shopSelect').value || Object.keys(shopBranches)[0];
+
+        document.getElementById('driveHistoryShop').value=selected;
+
+        await loadDriveHistory(selected);
+
+    }
+
+    let driveHistoryFiles=[];
+    function filterDriveHistory(){
+        const results=document.getElementById('driveHistoryResults');
+        const state=document.getElementById('driveHistoryState');
+        if(!results||!state)return;
+        const shop=document.getElementById('driveHistoryShop').value;
+        const query=(document.getElementById('driveHistorySearch')?.value||'').trim().toLowerCase();
+        const matches=driveHistoryFiles.filter(file=>{
+            const p=file.appProperties||{};
+            return [file.name,p.drNumber,p.savedBy,p.savedByEmail].some(value=>String(value||'').toLowerCase().includes(query));
+        });
+        results.replaceChildren();
+        state.textContent=matches.length+' of '+driveHistoryFiles.length+' Drive file(s) in '+shop+(driveHistoryPartial?' — list is partial':'' );
+        if(!matches.length){results.textContent=query?'No matching DR records.':'No saved DR files in this shop yet.';return;}
+        for(const file of matches){
+            const props=file.appProperties||{};
+            const row=document.createElement('div');
+            row.style.cssText='display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid #475569';
+            const info=document.createElement('div');info.style.cssText='min-width:180px;flex:1';
+            const name=document.createElement('strong');name.textContent=props.drNumber?'DR # '+props.drNumber:file.name||'Unnamed file';
+            const filename=document.createElement('div');filename.textContent=file.name||'';filename.style.cssText='font-size:12px;color:#cbd5e1;margin-top:3px';
+            const date=document.createElement('div');date.style.cssText='color:#94a3b8;font-size:12px;margin-top:3px';
+            const stamp=props.savedAt||file.createdTime;
+            date.textContent='Saved: '+(stamp?new Date(stamp).toLocaleString():'Date unavailable')+(props.savedBy?'  •  By: '+props.savedBy:'  •  Saved by: not recorded');
+            info.append(name,filename,date);
+            const link=document.createElement('a');link.textContent='📂 Open in Drive';link.target='_blank';link.rel='noopener noreferrer';link.style.cssText='color:#38bdf8;font-weight:bold';
+            link.href='https://drive.google.com/file/d/'+encodeURIComponent(file.id)+'/view';
+            row.append(info,link);results.append(row);
+        }
+    }
+    let driveHistoryPartial=false;
+    async function loadDriveHistory(shop) {
+        const state=document.getElementById('driveHistoryState'),results=document.getElementById('driveHistoryResults');
+        if(!state||!results)return;
+        state.textContent='Loading records from Google Drive…';results.replaceChildren();driveHistoryFiles=[];driveHistoryPartial=false;
+        try {
+            const data=await api('/api/receipts?shop='+encodeURIComponent(shop));
+            if(document.getElementById('driveHistoryShop')?.value!==shop)return;
+            driveHistoryFiles=Array.isArray(data.files)?data.files:[];
+            driveHistoryPartial=Boolean(data.partial);
+            filterDriveHistory();
+        }catch(e){state.textContent='Unable to load Google Drive history: '+e.message;}
+    }
+
+    // --- PRINT / SAVE AS PDF ---
+
+    function printReceipt() {
+
+        window.print();
+
+    }
+
+
+
+    function exportToCSV() {
+
+        let rows = document.querySelectorAll('#itemsBody tr');
+
+        let csvContent = "data:text/csv;charset=utf-8,DR_No,Shop,Deliver_To,Item_Code,Description,Qty,Amount\r\n";
+
+        let drNo = document.getElementById('drNo').value;
+
+        let shop = document.getElementById('shopSelect').value;
+
+        let deliverTo = document.getElementById('deliverTo').value;
+
+
+
+        rows.forEach(row => {
+
+            let code = row.querySelector('.item-code').value;
+
+            let desc = row.querySelector('.item-desc').value;
+
+            let qty = row.querySelector('.item-qty').value;
+
+            let amt = row.querySelector('.item-amount').value;
+
+            csvContent += `${drNo},"${shop}","${deliverTo}",${code},"${desc}",${qty},${amt}\r\n`;
+
+        });
+
+
+
+        let encodedUri = encodeURI(csvContent);
+
+        let link = document.createElement("a");
+
+        link.setAttribute("href", encodedUri);
+
+        link.setAttribute("download", `DR_${drNo || 'Draft'}.csv`);
+
+        document.body.appendChild(link);
+
+        link.click();
+
+        link.remove();
+
+    }
+
+
+
+    loadDraft();
+
+    renderShopGallery();
+
+    startAuth();
+
+</script>
+
+
+
+</body>
+
+</html>
