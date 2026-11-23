@@ -277,14 +277,16 @@
       </div>
 
       <div id="adminBackup" class="card admin-content" hidden>
-        <h3>💾 Admin Backup Center — Phase 4</h3>
-        <p class="muted">Download a snapshot of DR file metadata and recorded activity logs. This manifest does NOT contain the actual DR JSON contents and is not a replacement for a full Google Drive backup.</p>
+        <h3>💾 Admin Backup Center — Phase 5</h3>
+        <p class="muted">Export metadata snapshots or download a ZIP containing actual DR JSON contents from all six shop folders. Only administrators can use these exports.</p>
         <div class="actions" style="margin:18px 0">
           <button type="button" id="backupManifestBtn" class="btn-green" onclick="exportBackupManifest()">📥 Export Backup Manifest (.json)</button>
           <button type="button" id="backupActivityBtn" class="btn-blue" onclick="exportBackupActivity()">📥 Export Activity Snapshot (.json)</button>
+          <button type="button" id="backupFullBtn" class="btn-teal" onclick="exportFullBackupZip()">📦 Download Full DR Backup (.zip)</button>
         </div>
         <p id="backupStatus" class="muted" role="status" aria-live="polite">Ready. Only administrators can export.</p>
-        <div class="card"><h3>Backup Coverage</h3><p class="muted">Manifest: shop, filename, file ID, timestamps, and Drive metadata (where available). Activity snapshot: server events currently returned by the API. Files are downloaded to this browser, not saved to Google Drive.</p><p class="muted">For a complete backup of DR JSON contents, a separate authenticated backend export endpoint is required. Do not delete any originals based on this manifest.</p></div>
+        <progress id="backupProgress" max="100" value="0" hidden style="width:100%;margin:10px 0"></progress>
+        <div class="card"><h3>Backup Coverage</h3><p class="muted">Manifest: shop, filename, file ID, timestamps, and Drive metadata (where available). Activity snapshot: server events currently returned by the API. Files are downloaded to this browser, not saved to Google Drive.</p><p class="muted">Full ZIP export uses a new authenticated, read-only backend endpoint and downloads actual JSON contents. The ZIP is saved to your computer. Exports can be limited by browser memory, network errors, and folder listing limits; never delete the originals without independent verification.</p></div>
       </div>
 
       <div id="adminSettings" class="card admin-content" hidden>
@@ -1291,6 +1293,90 @@
             status.textContent = '✅ Activity snapshot exported: ' + result.events.length + ' events.';
         } catch(e) { status.textContent = '❌ Activity export failed: ' + e.message; }
         finally { btn.disabled = false; }
+    }
+
+
+    // Phase 5: full DR JSON backup, fetched through admin-verified Cloudflare Worker.
+    // This creates a local ZIP only; Google Drive originals are never modified.
+    async function loadBackupZipLibrary() {
+        if (window.JSZip) return window.JSZip;
+        if (!window.__ijinZipLoading) {
+            window.__ijinZipLoading = new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+                script.onload = () => window.JSZip ? resolve(window.JSZip) : reject(new Error('ZIP library unavailable.'));
+                script.onerror = () => reject(new Error('Could not load ZIP library. Check internet or content blockers.'));
+                document.head.appendChild(script);
+            }).catch(e => { window.__ijinZipLoading = null; throw e; });
+        }
+        return window.__ijinZipLoading;
+    }
+    function backupSafeName(name) {
+        return String(name || 'unnamed').replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').slice(0, 130).trim() || 'unnamed';
+    }
+    async function exportFullBackupZip() {
+        if (userRole !== 'admin') { alert('Administrator access required.'); return; }
+        const btn = document.getElementById('backupFullBtn');
+        const status = document.getElementById('backupStatus');
+        const progress = document.getElementById('backupProgress');
+        if (btn.disabled) return;
+        btn.disabled = true; progress.hidden = false; progress.value = 0;
+        try {
+            status.textContent = 'Loading ZIP library and DR file lists...';
+            const JSZip = await loadBackupZipLibrary();
+            const shops = ['Watsons, SM Beauty, Look','Landers','Landmark','Mitsukoshi','Metro Gaisano','Robinsons'];
+            const lists = [];
+            for (const shop of shops) {
+                const data = await api('/api/receipts?shop=' + encodeURIComponent(shop));
+                if (!Array.isArray(data.files) || data.partial) {
+                    throw new Error('Incomplete Drive listing for ' + shop + '. Backup stopped to avoid an incomplete archive.');
+                }
+                lists.push({shop, files:data.files.filter(f => f.mimeType === 'application/json' && /\.json$/i.test(f.name || ''))});
+            }
+            const total = lists.reduce((n, item) => n + item.files.length, 0);
+            if (!total) throw new Error('No DR JSON files found.');
+            if (total > 1000) throw new Error('More than 1000 JSON files. Use smaller backups; full export stopped.');
+            const zip = new JSZip();
+            const stamp = new Date().toISOString();
+            const manifest = {system:'I-JIN DR System',type:'FULL_DR_JSON_BACKUP',generatedAt:stamp,
+                expectedFiles:total, files:[], note:'Read-only snapshot of JSON files currently listed in six Drive shop folders.'};
+            let completed = 0;
+            for (const entry of lists) {
+                const folder = zip.folder(backupSafeName(entry.shop));
+                for (const file of entry.files) {
+                    status.textContent = 'Downloading actual DR JSON: ' + (completed + 1) + '/' + total + ' — ' + entry.shop;
+                    const token = await authUser.getIdToken();
+                    const url = API_BASE + '/api/admin/backup/file?shop=' + encodeURIComponent(entry.shop) + '&id=' + encodeURIComponent(file.id);
+                    const res = await fetch(url, {headers:{Authorization:'Bearer ' + token}, cache:'no-store'});
+                    if (!res.ok) {
+                        const error = await res.json().catch(() => ({}));
+                        throw new Error('File ' + file.name + ': ' + (error.error || 'HTTP ' + res.status));
+                    }
+                    const content = await res.text();
+                    JSON.parse(content); // Reject corrupted / invalid JSON rather than packaging it.
+                    const uniqueName = backupSafeName(file.name.replace(/\.json$/i,'')) + '_' + backupSafeName(file.id) + '.json';
+                    folder.file(uniqueName, content);
+                    manifest.files.push({shop:entry.shop, id:file.id, originalName:file.name, zipPath:backupSafeName(entry.shop)+'/'+uniqueName,
+                        sizeBytes:new TextEncoder().encode(content).length});
+                    completed++;
+                    progress.value = Math.round(completed / total * 90);
+                }
+            }
+            zip.file('BACKUP_MANIFEST.json', JSON.stringify(manifest, null, 2));
+            status.textContent = 'Compressing ' + total + ' DR JSON files into ZIP...';
+            const blob = await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:5}}, metadata => {
+                progress.value = 90 + Math.round(metadata.percent / 10);
+            });
+            const objectUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = objectUrl;
+            a.download = 'IJIN_Full_DR_Backup_' + stamp.slice(0,10) + '.zip';
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+            progress.value = 100;
+            status.textContent = '✅ ZIP download started: ' + total + ' DR JSON files across six shop folders. Original Drive files unchanged. Verify ZIP before relying on it.';
+        } catch (error) {
+            status.textContent = '❌ Full backup failed; no complete ZIP was produced: ' + error.message;
+        } finally { btn.disabled = false; }
     }
 
     // The Google OAuth flow must be initiated and completed by the secure backend.
