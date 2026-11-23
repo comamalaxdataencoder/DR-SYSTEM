@@ -217,7 +217,7 @@
 
       <div class="admin-stats"><div class="stat"><span>Account capacity</span><strong>10</strong><small>1 Admin + 9 Staff</small></div><div class="stat"><span>Active staff</span><strong id="activeStaffCount">—</strong><small>Maximum 9</small></div><div class="stat"><span>DR files in Drive</span><strong id="totalDrCount">—</strong><small>From synced shop folders</small></div><div class="stat"><span>Recent activity</span><strong id="activityCount">—</strong><small>Latest recorded events</small></div></div>
 
-      <div class="admin-tabs"><button id="tabStaff" class="selected" onclick="showAdminTab('staff')">👥 Staff Management</button><button id="tabRecords" onclick="showAdminTab('records')">📁 DR Records</button><button id="tabActivity" onclick="showAdminTab('activity')">🕒 Activity Logs</button><button id="tabDashboard" onclick="showAdminTab('dashboard')">📊 Activity Dashboard</button><button id="tabSettings" onclick="showAdminTab('settings')">⚙️ Settings</button></div>
+      <div class="admin-tabs"><button id="tabStaff" class="selected" onclick="showAdminTab('staff')">👥 Staff Management</button><button id="tabRecords" onclick="showAdminTab('records')">📁 DR Records</button><button id="tabActivity" onclick="showAdminTab('activity')">🕒 Activity Logs</button><button id="tabDashboard" onclick="showAdminTab('dashboard')">📊 Activity Dashboard</button><button id="tabBackup" onclick="showAdminTab('backup')">💾 Backup Center</button><button id="tabSettings" onclick="showAdminTab('settings')">⚙️ Settings</button></div>
 
       <div id="adminStaff" class="card admin-content"><h3>Staff Accounts</h3><p class="muted">Staff accounts are managed through the secure Cloudflare backend. Up to 9 active staff accounts.</p><form id="staffForm" class="staff-form"><label>Full name<input id="staffName" placeholder="Staff full name" required></label><label>Work email<input id="staffEmail" type="email" placeholder="staff\@company.com" required></label><label>Temporary password<input id="staffPassword" type="password" minlength="12" placeholder="At least 12 characters" required></label><button id="addStaffBtn" class="btn-green" type="submit">+ Add Staff</button></form><p id="adminError" role="alert"></p><button type="button" class="btn-blue" onclick="loadStaff()">↻ Refresh Staff List</button><div id="staffList" class="staff-list"></div></div>
 
@@ -274,6 +274,17 @@
         <div class="table-responsive"><table class="dash-table"><thead><tr><th>Date</th><th>Staff</th><th>DR Saved</th></tr></thead><tbody id="dashDailyRows"></tbody></table></div>
         <h3 style="margin-top:24px">Staff Activity Summary</h3>
         <div class="table-responsive"><table class="dash-table"><thead><tr><th>Staff</th><th>DR Saved</th><th>Logins</th><th>Logouts</th><th>Other Events</th></tr></thead><tbody id="dashStaffRows"></tbody></table></div>
+      </div>
+
+      <div id="adminBackup" class="card admin-content" hidden>
+        <h3>💾 Admin Backup Center — Phase 4</h3>
+        <p class="muted">Download a snapshot of DR file metadata and recorded activity logs. This manifest does NOT contain the actual DR JSON contents and is not a replacement for a full Google Drive backup.</p>
+        <div class="actions" style="margin:18px 0">
+          <button type="button" id="backupManifestBtn" class="btn-green" onclick="exportBackupManifest()">📥 Export Backup Manifest (.json)</button>
+          <button type="button" id="backupActivityBtn" class="btn-blue" onclick="exportBackupActivity()">📥 Export Activity Snapshot (.json)</button>
+        </div>
+        <p id="backupStatus" class="muted" role="status" aria-live="polite">Ready. Only administrators can export.</p>
+        <div class="card"><h3>Backup Coverage</h3><p class="muted">Manifest: shop, filename, file ID, timestamps, and Drive metadata (where available). Activity snapshot: server events currently returned by the API. Files are downloaded to this browser, not saved to Google Drive.</p><p class="muted">For a complete backup of DR JSON contents, a separate authenticated backend export endpoint is required. Do not delete any originals based on this manifest.</p></div>
       </div>
 
       <div id="adminSettings" class="card admin-content" hidden>
@@ -1207,7 +1218,7 @@
 
     function showAdminTab(tab) {
 
-        for (const key of ['staff','records','activity','dashboard','settings']) {
+        for (const key of ['staff','records','activity','dashboard','backup','settings']) {
 
             document.getElementById('admin'+key[0].toUpperCase()+key.slice(1)).hidden = key !== tab;
 
@@ -1218,6 +1229,68 @@
         if (tab === 'settings') checkCompanyDrive();
         if (tab === 'dashboard') { renderActivityDashboard(); loadActivity(); }
 
+    }
+
+    // Phase 4: admin-only, read-only backup snapshots. No secrets or localStorage.
+    function downloadBackupJson(filename, payload) {
+        const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json;charset=utf-8'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 3000);
+    }
+    async function exportBackupManifest() {
+        if (userRole !== 'admin') { alert('Administrator access required.'); return; }
+        const btn = document.getElementById('backupManifestBtn');
+        const status = document.getElementById('backupStatus');
+        if (btn.disabled) return;
+        btn.disabled = true;
+        status.textContent = 'Loading DR file metadata from all six shop folders...';
+        try {
+            const shops = ['Watsons, SM Beauty, Look','Landers','Landmark','Mitsukoshi','Metro Gaisano','Robinsons'];
+            const results = [];
+            for (const shop of shops) {
+                const data = await api('/api/receipts?shop=' + encodeURIComponent(shop));
+                if (!Array.isArray(data.files)) throw new Error('Unexpected file list for ' + shop);
+                results.push({shop, count:data.files.length, partial:!!data.partial, files:data.files.map(f => ({
+                    id:f.id, name:f.name, mimeType:f.mimeType, size:f.size,
+                    createdTime:f.createdTime, modifiedTime:f.modifiedTime,
+                    description:f.description, appProperties:f.appProperties,
+                    webViewLink:f.webViewLink
+                }))});
+            }
+            const partial = results.some(r => r.partial);
+            const stamp = new Date().toISOString();
+            downloadBackupJson('IJIN_DR_Manifest_' + stamp.slice(0,10) + '.json', {
+                system:'I-JIN DR System', type:'DR_FILE_METADATA_MANIFEST', generatedAt:stamp,
+                note:'METADATA ONLY. Not a backup of actual DR JSON file contents.',
+                partial, shops:results
+            });
+            status.textContent = '✅ Manifest exported: ' + results.reduce((n,r)=>n+r.count,0) +
+                ' file entries.' + (partial ? ' ⚠️ Some folder listings are partial.' : '') +
+                ' Original DR files were not changed.';
+        } catch(e) { status.textContent = '❌ Manifest export failed: ' + e.message; }
+        finally { btn.disabled = false; }
+    }
+    async function exportBackupActivity() {
+        if (userRole !== 'admin') { alert('Administrator access required.'); return; }
+        const btn = document.getElementById('backupActivityBtn');
+        const status = document.getElementById('backupStatus');
+        if (btn.disabled) return;
+        btn.disabled = true;
+        status.textContent = 'Loading server-recorded activity events...';
+        try {
+            const result = await api('/api/admin/activity');
+            if (!Array.isArray(result.events)) throw new Error('Unexpected activity response.');
+            const stamp = new Date().toISOString();
+            downloadBackupJson('IJIN_Activity_Snapshot_' + stamp.slice(0,10) + '.json', {
+                system:'I-JIN DR System', type:'ACTIVITY_SNAPSHOT', generatedAt:stamp,
+                note:'Only currently returned backend events; retention and response limits may apply.',
+                count:result.events.length, events:result.events
+            });
+            status.textContent = '✅ Activity snapshot exported: ' + result.events.length + ' events.';
+        } catch(e) { status.textContent = '❌ Activity export failed: ' + e.message; }
+        finally { btn.disabled = false; }
     }
 
     // The Google OAuth flow must be initiated and completed by the secure backend.
