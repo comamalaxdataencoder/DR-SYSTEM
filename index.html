@@ -229,6 +229,7 @@
           <label>To date<input id="dashTo" type="date" onchange="renderActivityDashboard()"></label>
           <button type="button" class="btn-indigo" onclick="clearDashboardDates()">Clear Dates</button>
           <button type="button" id="refreshDashboardBtn" class="btn-blue" onclick="refreshDashboard()">🔄 Refresh Dashboard</button>
+          <button type="button" id="exportDashboardBtn" class="btn-green" onclick="exportDashboardXLSX()">📥 Export Dashboard (.xlsx)</button>
         </div>
         <p id="dashStatus" class="muted" role="status"></p>
         <div class="dash-stats">
@@ -1349,6 +1350,124 @@
         } finally {
             button.disabled = false;
             button.textContent = '🔄 Refresh Dashboard';
+        }
+    }
+
+    // Phase 1: Export the currently loaded, date-filtered Activity Dashboard.
+    // Uses the same local-date interpretation and staff grouping as the dashboard.
+    async function ensureDashboardXLSX() {
+        if (window.XLSX && window.XLSX.utils && window.XLSX.writeFile) return;
+        const sources = [
+            'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+            'https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js'
+        ];
+        for (const src of sources) {
+            try {
+                await new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = src;
+                    script.onload = resolve;
+                    script.onerror = () => { script.remove(); reject(new Error('CDN unavailable')); };
+                    document.head.appendChild(script);
+                });
+                if (window.XLSX && window.XLSX.utils && window.XLSX.writeFile) return;
+            } catch (error) { console.warn('Excel library fallback:', error.message); }
+        }
+        throw new Error('Excel library could not load. Check your internet connection and try again.');
+    }
+
+    async function exportDashboardXLSX() {
+        const button = document.getElementById('exportDashboardBtn');
+        const from = document.getElementById('dashFrom').value;
+        const to = document.getElementById('dashTo').value;
+        if (from && to && from > to) {
+            alert('From date must be on or before To date.');
+            return;
+        }
+        if (button.disabled) return;
+        button.disabled = true;
+        button.textContent = '⏳ Preparing Excel...';
+        try {
+            await ensureDashboardXLSX();
+            const events = activityEvents.filter(e => {
+                const day = dashboardDate(e);
+                return day && (!from || day >= from) && (!to || day <= to);
+            });
+            if (!events.length) {
+                alert('No activity records within the selected dates to export.');
+                return;
+            }
+            const staffKey = e => String(e.uid || e.actorUid || e.actorEmail || e.email || e.actorName || e.name || 'Unknown');
+            const staffName = e => String(e.actorName || e.name || e.actorEmail || e.email || 'Unknown');
+            const daily = new Map();
+            const staff = new Map();
+            for (const e of events) {
+                const key = staffKey(e);
+                const name = staffName(e);
+                const day = dashboardDate(e);
+                if (!staff.has(key)) staff.set(key, {name, dr:0, login:0, logout:0, other:0});
+                const row = staff.get(key);
+                if (e.action === 'DR_SAVED') {
+                    row.dr++;
+                    const dailyKey = day + '\u0001' + key;
+                    if (!daily.has(dailyKey)) daily.set(dailyKey, {day, name, count:0});
+                    daily.get(dailyKey).count++;
+                } else if (e.action === 'LOGIN') row.login++;
+                else if (e.action === 'LOGOUT') row.logout++;
+                else row.other++;
+            }
+            const totalDr = events.filter(e => e.action === 'DR_SAVED').length;
+            const totalLogin = events.filter(e => e.action === 'LOGIN').length;
+            const totalLogout = events.filter(e => e.action === 'LOGOUT').length;
+            const savers = [...staff.values()].filter(x => x.dr > 0).length;
+            // Treat all server-supplied strings as literal text, never spreadsheet formulas.
+            const safe = value => {
+                const str = String(value ?? '');
+                return /^[\s]*[=+@-]/.test(str) ? "'" + str : str;
+            };
+            const workbook = XLSX.utils.book_new();
+            const append = (name, rows, widths) => {
+                const sheet = XLSX.utils.aoa_to_sheet(rows);
+                sheet['!cols'] = widths.map(wch => ({wch}));
+                sheet['!autofilter'] = {ref: XLSX.utils.encode_range({s:{r:0,c:0},e:{r:Math.max(rows.length-1,0),c:rows[0].length-1}})};
+                XLSX.utils.book_append_sheet(workbook, sheet, name);
+            };
+            append('Dashboard Summary', [
+                ['I-JIN DR SYSTEM — ACTIVITY DASHBOARD', 'Value'],
+                ['From Date', from || 'All loaded dates'],
+                ['To Date', to || 'All loaded dates'],
+                ['Exported At', new Date().toLocaleString('en-PH')],
+                ['Loaded Events', activityEvents.length],
+                ['Filtered Events', events.length],
+                ['DR Saved', totalDr],
+                ['Logins', totalLogin],
+                ['Logouts', totalLogout],
+                ['Staff Who Saved DR', savers],
+                ['Data Note', 'Based on loaded backend activity events; not total Drive files. Backend retention/response limits may apply.']
+            ], [37, 100]);
+            append('Daily DR Productivity', [
+                ['Date', 'Staff', 'DR Saved'],
+                ...[...daily.values()].sort((a,b) => b.day.localeCompare(a.day) || a.name.localeCompare(b.name))
+                    .map(x => [x.day, safe(x.name), x.count])
+            ], [18, 38, 17]);
+            append('Staff Activity Summary', [
+                ['Staff', 'DR Saved', 'Logins', 'Logouts', 'Other Events', 'Total Events'],
+                ...[...staff.values()].sort((a,b) => b.dr-a.dr || a.name.localeCompare(b.name))
+                    .map(x => [safe(x.name), x.dr, x.login, x.logout, x.other, x.dr+x.login+x.logout+x.other])
+            ], [38, 17, 15, 15, 20, 18]);
+            append('Activity Details', [
+                ['Date', 'Date and Time', 'Staff', 'Email', 'Activity', 'DR Number', 'Shop', 'Target Staff', 'Target Email'],
+                ...events.slice().sort((a,b) => String(b.at || '').localeCompare(String(a.at || '')))
+                    .map(e => [dashboardDate(e), e.at ? new Date(e.at).toLocaleString('en-PH') : '', safe(staffName(e)), safe(e.actorEmail || e.email || ''), safe(e.action || ''), safe(e.drNumber || ''), safe(e.shop || ''), safe(e.targetName || ''), safe(e.targetEmail || '')])
+            ], [17, 26, 35, 38, 29, 23, 35, 33, 38]);
+            const datePart = new Date().toLocaleDateString('en-CA').replaceAll('/', '-');
+            XLSX.writeFile(workbook, 'I-JIN_Dashboard_' + datePart + '.xlsx', {bookType:'xlsx', compression:true});
+        } catch (error) {
+            console.error('Dashboard Excel export failed:', error);
+            alert('Excel export failed: ' + error.message);
+        } finally {
+            button.disabled = false;
+            button.textContent = '📥 Export Dashboard (.xlsx)';
         }
     }
 
