@@ -146,6 +146,21 @@
     .dash-table th,.dash-table td{padding:12px;border-bottom:1px solid #334155;text-align:left}
     .dash-table th{color:#cbd5e1}.dash-table td{color:#f8fafc}
     @media(max-width:750px){.dash-stats{grid-template-columns:repeat(2,1fr)}}
+
+    /* Phase 2: Staff productivity charts */
+    .productivity-charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:22px 0}
+    .productivity-panel{background:#0f172a;border:1px solid #334155;border-radius:12px;padding:18px;min-width:0}
+    .productivity-panel h3{font-size:16px;margin:0 0 6px}
+    .productivity-panel p{font-size:12px;color:#94a3b8;margin:0 0 16px}
+    .chart-list{display:grid;gap:14px}
+    .chart-entry{display:grid;gap:5px}
+    .chart-meta{display:flex;justify-content:space-between;gap:12px;font-size:12px;color:#cbd5e1}
+    .chart-meta span:first-child{overflow-wrap:anywhere}
+    .chart-track{height:18px;background:#1e293b;border-radius:5px;overflow:hidden}
+    .chart-fill{height:100%;background:#38bdf8;border-radius:5px;min-width:0}
+    .chart-fill.staff{background:#34d399}
+    .chart-empty{font-size:13px;color:#94a3b8;padding:20px 0}
+    @media(max-width:850px){.productivity-charts{grid-template-columns:1fr}}
     #adminError{color:#fca5a5}
 
     @media(max-width:900px){.admin-stats{grid-template-columns:repeat(2,1fr)}.staff-form{grid-template-columns:1fr 1fr}}@media(max-width:600px){.admin-stats,.staff-form{grid-template-columns:1fr}.admin-heading{align-items:start;flex-direction:column}}
@@ -237,6 +252,10 @@
           <div><span>Logins</span><strong id="dashLogin">0</strong></div>
           <div><span>Logouts</span><strong id="dashLogout">0</strong></div>
           <div><span>Staff who saved DR</span><strong id="dashStaff">0</strong></div>
+        </div>
+        <div class="productivity-charts" aria-label="Staff productivity charts">
+          <section class="productivity-panel"><h3>📅 Daily DR Saved</h3><p>Total DR saved per day within the selected dates</p><div id="chartDaily" class="chart-list" role="img" aria-label="Daily DR saved bar chart"></div></section>
+          <section class="productivity-panel"><h3>👥 DR Saved by Staff</h3><p>Compare staff based on recorded DR saves</p><div id="chartStaff" class="chart-list" role="img" aria-label="DR saved by staff bar chart"></div></section>
         </div>
         <h3>DR Saved by Staff and Day</h3>
         <div class="table-responsive"><table class="dash-table"><thead><tr><th>Date</th><th>Staff</th><th>DR Saved</th></tr></thead><tbody id="dashDailyRows"></tbody></table></div>
@@ -1471,6 +1490,50 @@
         }
     }
 
+    // Phase 2 charts use the exact same loaded, date-filtered events as the dashboard.
+    function renderProductivityCharts(events) {
+        const dayTotals = new Map();
+        const staffTotals = new Map();
+        for (const event of events) {
+            if (event.action !== 'DR_SAVED') continue;
+            const day = dashboardDate(event);
+            if (!day) continue;
+            const key = String(event.uid || event.actorUid || event.actorEmail || event.email || event.actorName || event.name || 'Unknown');
+            const name = String(event.actorName || event.name || event.actorEmail || event.email || 'Unknown');
+            dayTotals.set(day, (dayTotals.get(day) || 0) + 1);
+            if (!staffTotals.has(key)) staffTotals.set(key, {name, count:0});
+            staffTotals.get(key).count++;
+        }
+        function draw(id, entries, barClass) {
+            const root = document.getElementById(id);
+            if (!root) return;
+            root.replaceChildren();
+            if (!entries.length) {
+                const empty = document.createElement('div');
+                empty.className = 'chart-empty';
+                empty.textContent = 'No DR saved records for the selected dates.';
+                root.append(empty);
+                root.setAttribute('aria-label', empty.textContent);
+                return;
+            }
+            const max = Math.max(...entries.map(x => x.count), 1);
+            root.setAttribute('aria-label', entries.map(x => x.label + ': ' + x.count + ' DR saved').join('; '));
+            for (const entry of entries) {
+                const item = document.createElement('div'); item.className = 'chart-entry';
+                const meta = document.createElement('div'); meta.className = 'chart-meta';
+                const label = document.createElement('span'); label.textContent = entry.label;
+                const count = document.createElement('strong'); count.textContent = String(entry.count);
+                meta.append(label, count);
+                const track = document.createElement('div'); track.className = 'chart-track';
+                const fill = document.createElement('div'); fill.className = 'chart-fill ' + barClass;
+                fill.style.width = (entry.count / max * 100).toFixed(2) + '%';
+                track.append(fill); item.append(meta, track); root.append(item);
+            }
+        }
+        draw('chartDaily', [...dayTotals].sort((a,b) => b[0].localeCompare(a[0])).map(([label,count]) => ({label,count})), '');
+        draw('chartStaff', [...staffTotals.values()].sort((a,b) => b.count - a.count || a.name.localeCompare(b.name)).map(x => ({label:x.name,count:x.count})), 'staff');
+    }
+
     function clearDashboardDates() {
         document.getElementById('dashFrom').value = '';
         document.getElementById('dashTo').value = '';
@@ -1486,12 +1549,14 @@
             for (const id of ['dashDr','dashLogin','dashLogout','dashStaff']) document.getElementById(id).textContent = '—';
             document.getElementById('dashDailyRows').replaceChildren();
             document.getElementById('dashStaffRows').replaceChildren();
+            renderProductivityCharts([]);
             return;
         }
         const events = activityEvents.filter(e => {
             const day = dashboardDate(e);
             return day && (!from || day >= from) && (!to || day <= to);
         });
+        renderProductivityCharts(events);
         const drs = events.filter(e => e.action === 'DR_SAVED');
         const staff = new Map();
         const daily = new Map();
