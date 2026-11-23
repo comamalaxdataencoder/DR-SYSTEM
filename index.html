@@ -1541,7 +1541,7 @@
 
     // Phase 6B: read-only, fail-closed conflict inspection. No restore request is sent.
     function selectValidBackupRecords(select) {
-        if (userRole !== 'admin') return;
+        if (userRole !== 'admin') { document.getElementById('backupRestoreStatus').textContent = '❌ Admin session not detected. Please sign in again as administrator.'; return; }
         backupImportState.checked = new Set();
         document.querySelectorAll('#backupImportRows tr').forEach((row,i)=>{
             const checkbox=row.querySelector('input[type="checkbox"]');
@@ -1554,14 +1554,14 @@
         document.getElementById('backupRestoreStatus').textContent=backupImportState.checked.size+' valid record(s) selected. Check Existing DRs before any future restore.';
     }
     async function checkBackupRestoreConflicts() {
-        if (userRole !== 'admin') return;
+        if (userRole !== 'admin') { document.getElementById('backupRestoreStatus').textContent = '❌ Admin session not detected. Please sign in again as administrator.'; return; }
         const selected=[...backupImportState.checked].map(i=>({index:i,record:backupImportState.records[i]})).filter(x=>x.record && !x.record.errors.length);
         const status=document.getElementById('backupRestoreStatus');
         const btn=document.getElementById('backupCheckBtn');
         const report=document.getElementById('backupRestoreReport');
         report.hidden=true; report.replaceChildren();
         backupImportState.checkedConflicts=null;
-        if (!selected.length) {status.textContent='Select at least one valid DR record first.';return;}
+        if (!selected.length) {status.textContent='⚠️ Select at least one valid DR record first.';return;}
         btn.disabled=true;
         try {
             const byShop=new Map();
