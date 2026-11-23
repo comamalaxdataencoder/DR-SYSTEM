@@ -277,7 +277,7 @@
       </div>
 
       <div id="adminBackup" class="card admin-content" hidden>
-        <h3>💾 Admin Backup Center — Phase 6A</h3>
+        <h3>💾 Admin Backup Center — Phase 6B</h3>
         <p class="muted">Export metadata snapshots or download a ZIP containing actual DR JSON contents from all six shop folders. Only administrators can use these exports.</p>
         <div class="actions" style="margin:18px 0">
           <button type="button" id="backupManifestBtn" class="btn-green" onclick="exportBackupManifest()">📥 Export Backup Manifest (.json)</button>
@@ -287,7 +287,7 @@
         <p id="backupStatus" class="muted" role="status" aria-live="polite">Ready. Only administrators can export.</p>
         <progress id="backupProgress" max="100" value="0" hidden style="width:100%;margin:10px 0"></progress>
         <section class="card" aria-label="Phase 6A backup validation" style="margin-top:18px">
-          <h3>📂 Phase 6A — Import, Validate &amp; Preview Backup</h3>
+          <h3>📂 Phase 6B — Validate, Select &amp; Check Restore Conflicts</h3>
           <p class="muted">Choose a Full DR Backup ZIP exported by this system. Validation runs locally in your browser. No files are uploaded or restored to Google Drive.</p>
           <div class="actions" style="margin:12px 0">
             <label for="backupImportFile" class="file-upload-btn btn-blue">📂 Choose Backup ZIP</label>
@@ -303,7 +303,19 @@
             <div><span>Duplicate DR Keys</span><strong id="backupImportDuplicate">0</strong></div>
           </div>
           <div id="backupImportResults" hidden>
-            <div class="table-responsive"><table class="dash-table"><thead><tr><th>ZIP File</th><th>Shop</th><th>DR Number</th><th>Items</th><th>Validation</th><th>Action</th></tr></thead><tbody id="backupImportRows"></tbody></table></div>
+            <div class="table-responsive"><table class="dash-table"><thead><tr><th>Select</th><th>ZIP File</th><th>Shop</th><th>DR Number</th><th>Items</th><th>Validation</th><th>Action</th></tr></thead><tbody id="backupImportRows"></tbody></table></div>
+            <section class="card" style="margin-top:14px" aria-label="Phase 6B restore preparation">
+              <h3>🛡️ Phase 6B — Safe Restore Preparation</h3>
+              <p class="muted">Select valid records, then compare them against existing Drive filenames and DR metadata. This is a read-only check. Restore remains disabled until a secure, server-verified restore endpoint is deployed.</p>
+              <div class="actions" style="margin:12px 0">
+                <button type="button" class="btn-indigo" onclick="selectValidBackupRecords(true)">Select Valid</button>
+                <button type="button" class="btn-indigo" onclick="selectValidBackupRecords(false)">Deselect All</button>
+                <button type="button" id="backupCheckBtn" class="btn-blue" onclick="checkBackupRestoreConflicts()">🔍 Check Existing DRs</button>
+                <button type="button" class="btn-teal" disabled title="Requires secure backend restore endpoint">🔒 Restore Selected (Not Enabled)</button>
+              </div>
+              <p id="backupRestoreStatus" class="muted" role="status" aria-live="polite">Import a backup ZIP to begin.</p>
+              <div id="backupRestoreReport" class="table-responsive" hidden></div>
+            </section>
             <h3 style="margin-top:18px">Read-only DR Preview</h3>
             <pre id="backupImportPreview" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:420px;overflow:auto;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:14px;font-size:12px">Select Preview on a valid record.</pre>
           </div>
@@ -1402,10 +1414,15 @@
     }
 
     // Phase 6A: browser-local, read-only import validation; never sends ZIP contents to the server.
-    const backupImportState = {records:[]};
+    const backupImportState = {records:[], checked:new Set(), checkedConflicts:null};
     const BACKUP_SHOPS = ['Watsons, SM Beauty, Look','Landers','Landmark','Mitsukoshi','Metro Gaisano','Robinsons'];
     function clearBackupPreview() {
         backupImportState.records = [];
+        backupImportState.checked = new Set();
+        backupImportState.checkedConflicts = null;
+        document.getElementById('backupRestoreStatus').textContent = 'Import a backup ZIP to begin.';
+        document.getElementById('backupRestoreReport').hidden = true;
+        document.getElementById('backupRestoreReport').replaceChildren();
         document.getElementById('backupImportFile').value = '';
         document.getElementById('backupImportStatus').textContent = 'No backup selected.';
         document.getElementById('backupImportSummary').hidden = true;
@@ -1490,9 +1507,17 @@
                 else seen.set(key, record);
             }
             backupImportState.records = records;
+            backupImportState.checked = new Set();
+            backupImportState.checkedConflicts = null;
+            document.getElementById('backupRestoreStatus').textContent = 'Choose valid records and click Check Existing DRs.';
             const tbody = document.getElementById('backupImportRows');
             records.forEach((record, i) => {
                 const row = document.createElement('tr');
+                const selection = document.createElement('td');
+                const checkbox = document.createElement('input'); checkbox.type='checkbox'; checkbox.disabled=!!record.errors.length;
+                checkbox.setAttribute('aria-label','Select DR '+record.drNumber+' from '+record.shop);
+                checkbox.addEventListener('change',()=>{if(checkbox.checked)backupImportState.checked.add(i);else backupImportState.checked.delete(i); backupImportState.checkedConflicts=null; document.getElementById('backupRestoreStatus').textContent='Selection changed. Recheck existing DRs before restore.';});
+                selection.appendChild(checkbox);row.appendChild(selection);
                 for (const value of [record.path,record.shop,record.drNumber,String(record.items),record.errors.length ? '❌ ' + [...new Set(record.errors)].join('; ') : '✅ Valid']) {
                     const td = document.createElement('td'); td.textContent = value; td.style.overflowWrap = 'anywhere'; row.appendChild(td);
                 }
@@ -1512,6 +1537,66 @@
                 (records.length - invalid) + '/' + records.length + ' valid records. No Google Drive files changed.';
         } catch (error) { status.textContent = '❌ Backup validation failed: ' + error.message; }
         finally { input.disabled = false; progress.hidden = true; }
+    }
+
+    // Phase 6B: read-only, fail-closed conflict inspection. No restore request is sent.
+    function selectValidBackupRecords(select) {
+        if (userRole !== 'admin') return;
+        backupImportState.checked = new Set();
+        document.querySelectorAll('#backupImportRows tr').forEach((row,i)=>{
+            const checkbox=row.querySelector('input[type="checkbox"]');
+            if (!checkbox || checkbox.disabled) return;
+            checkbox.checked=!!select;
+            if (select) backupImportState.checked.add(i);
+        });
+        backupImportState.checkedConflicts=null;
+        document.getElementById('backupRestoreReport').hidden=true;
+        document.getElementById('backupRestoreStatus').textContent=backupImportState.checked.size+' valid record(s) selected. Check Existing DRs before any future restore.';
+    }
+    async function checkBackupRestoreConflicts() {
+        if (userRole !== 'admin') return;
+        const selected=[...backupImportState.checked].map(i=>({index:i,record:backupImportState.records[i]})).filter(x=>x.record && !x.record.errors.length);
+        const status=document.getElementById('backupRestoreStatus');
+        const btn=document.getElementById('backupCheckBtn');
+        const report=document.getElementById('backupRestoreReport');
+        report.hidden=true; report.replaceChildren();
+        backupImportState.checkedConflicts=null;
+        if (!selected.length) {status.textContent='Select at least one valid DR record first.';return;}
+        btn.disabled=true;
+        try {
+            const byShop=new Map();
+            for (const {record} of selected) {
+                if (!byShop.has(record.shop)) byShop.set(record.shop,[]);
+                byShop.get(record.shop).push(record);
+            }
+            const results=[];
+            for (const [shop,records] of byShop) {
+                status.textContent='Checking existing Drive files for '+shop+'...';
+                const data=await api('/api/receipts?shop='+encodeURIComponent(shop));
+                if (!Array.isArray(data.files) || data.partial) throw new Error('Drive listing incomplete for '+shop+'. Cannot safely determine conflicts.');
+                for (const record of records) {
+                    const key=record.drNumber.trim().toLowerCase();
+                    // Conservative filename match; ambiguous metadata is flagged for manual review.
+                    const matches=data.files.filter(f=>{
+                        const props=f.appProperties||{};
+                        const stored=String(props.drNumber||props.drNo||'').trim().toLowerCase();
+                        const filename=String(f.name||'');
+                        return stored===key || filename.toLowerCase().startsWith('dr_'+key+'_') || filename.toLowerCase()==='dr_'+key+'.json';
+                    });
+                    results.push({record, status:matches.length?'EXISTS / REVIEW':'NO FILENAME MATCH (UNVERIFIED)',matches:matches.length});
+                }
+            }
+            const table=document.createElement('table');table.className='dash-table';
+            const head=document.createElement('thead');const hrow=document.createElement('tr');
+            ['Shop','DR Number','Drive Check','Matches'].forEach(v=>{const th=document.createElement('th');th.textContent=v;hrow.appendChild(th);});head.appendChild(hrow);table.appendChild(head);
+            const body=document.createElement('tbody');
+            for (const result of results){const tr=document.createElement('tr');[result.record.shop,result.record.drNumber,result.status,String(result.matches)].forEach(v=>{const td=document.createElement('td');td.textContent=v;tr.appendChild(td);});body.appendChild(tr);}
+            table.appendChild(body);report.appendChild(table);report.hidden=false;
+            backupImportState.checkedConflicts=results;
+            const conflicts=results.filter(r=>r.matches).length;
+            status.textContent='Read-only check completed: '+results.length+' selected, '+conflicts+' possible existing DR(s). No matches do NOT guarantee absence; filenames and metadata may be incomplete. No files uploaded or modified.';
+        }catch(e){status.textContent='❌ Conflict check stopped: '+e.message+' No files changed.';}
+        finally{btn.disabled=false;}
     }
 
     // The Google OAuth flow must be initiated and completed by the secure backend.
