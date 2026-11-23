@@ -277,7 +277,7 @@
       </div>
 
       <div id="adminBackup" class="card admin-content" hidden>
-        <h3>💾 Admin Backup Center — Phase 5</h3>
+        <h3>💾 Admin Backup Center — Phase 6A</h3>
         <p class="muted">Export metadata snapshots or download a ZIP containing actual DR JSON contents from all six shop folders. Only administrators can use these exports.</p>
         <div class="actions" style="margin:18px 0">
           <button type="button" id="backupManifestBtn" class="btn-green" onclick="exportBackupManifest()">📥 Export Backup Manifest (.json)</button>
@@ -286,6 +286,28 @@
         </div>
         <p id="backupStatus" class="muted" role="status" aria-live="polite">Ready. Only administrators can export.</p>
         <progress id="backupProgress" max="100" value="0" hidden style="width:100%;margin:10px 0"></progress>
+        <section class="card" aria-label="Phase 6A backup validation" style="margin-top:18px">
+          <h3>📂 Phase 6A — Import, Validate &amp; Preview Backup</h3>
+          <p class="muted">Choose a Full DR Backup ZIP exported by this system. Validation runs locally in your browser. No files are uploaded or restored to Google Drive.</p>
+          <div class="actions" style="margin:12px 0">
+            <label for="backupImportFile" class="file-upload-btn btn-blue">📂 Choose Backup ZIP</label>
+            <input id="backupImportFile" type="file" accept=".zip,application/zip" hidden onchange="validateBackupZip(this.files && this.files[0])">
+            <button type="button" class="btn-indigo" onclick="clearBackupPreview()">Clear Preview</button>
+          </div>
+          <p id="backupImportStatus" class="muted" role="status" aria-live="polite">No backup selected.</p>
+          <progress id="backupImportProgress" max="100" value="0" hidden style="width:100%;margin:10px 0"></progress>
+          <div id="backupImportSummary" class="dash-stats" hidden>
+            <div><span>JSON Records</span><strong id="backupImportTotal">0</strong></div>
+            <div><span>Valid</span><strong id="backupImportValid">0</strong></div>
+            <div><span>Invalid / Mismatch</span><strong id="backupImportInvalid">0</strong></div>
+            <div><span>Duplicate DR Keys</span><strong id="backupImportDuplicate">0</strong></div>
+          </div>
+          <div id="backupImportResults" hidden>
+            <div class="table-responsive"><table class="dash-table"><thead><tr><th>ZIP File</th><th>Shop</th><th>DR Number</th><th>Items</th><th>Validation</th><th>Action</th></tr></thead><tbody id="backupImportRows"></tbody></table></div>
+            <h3 style="margin-top:18px">Read-only DR Preview</h3>
+            <pre id="backupImportPreview" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:420px;overflow:auto;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:14px;font-size:12px">Select Preview on a valid record.</pre>
+          </div>
+        </section>
         <div class="card"><h3>Backup Coverage</h3><p class="muted">Manifest: shop, filename, file ID, timestamps, and Drive metadata (where available). Activity snapshot: server events currently returned by the API. Files are downloaded to this browser, not saved to Google Drive.</p><p class="muted">Full ZIP export uses a new authenticated, read-only backend endpoint and downloads actual JSON contents. The ZIP is saved to your computer. Exports can be limited by browser memory, network errors, and folder listing limits; never delete the originals without independent verification.</p></div>
       </div>
 
@@ -1377,6 +1399,119 @@
         } catch (error) {
             status.textContent = '❌ Full backup failed; no complete ZIP was produced: ' + error.message;
         } finally { btn.disabled = false; }
+    }
+
+    // Phase 6A: browser-local, read-only import validation; never sends ZIP contents to the server.
+    const backupImportState = {records:[]};
+    const BACKUP_SHOPS = ['Watsons, SM Beauty, Look','Landers','Landmark','Mitsukoshi','Metro Gaisano','Robinsons'];
+    function clearBackupPreview() {
+        backupImportState.records = [];
+        document.getElementById('backupImportFile').value = '';
+        document.getElementById('backupImportStatus').textContent = 'No backup selected.';
+        document.getElementById('backupImportSummary').hidden = true;
+        document.getElementById('backupImportResults').hidden = true;
+        document.getElementById('backupImportRows').replaceChildren();
+        document.getElementById('backupImportPreview').textContent = 'Select Preview on a valid record.';
+        const progress = document.getElementById('backupImportProgress'); progress.hidden = true; progress.value = 0;
+    }
+    function previewBackupRecord(index) {
+        if (userRole !== 'admin') return;
+        const entry = backupImportState.records[index];
+        if (!entry || !entry.data || entry.errors.length) return;
+        document.getElementById('backupImportPreview').textContent = JSON.stringify(entry.data, null, 2);
+    }
+    async function validateBackupZip(file) {
+        if (userRole !== 'admin') { alert('Administrator access required.'); return; }
+        clearBackupPreview();
+        if (!file) return;
+        const status = document.getElementById('backupImportStatus');
+        const progress = document.getElementById('backupImportProgress');
+        const input = document.getElementById('backupImportFile');
+        input.disabled = true; progress.hidden = false;
+        try {
+            if (!/\.zip$/i.test(file.name)) throw new Error('Select a .zip file.');
+            if (file.size > 100 * 1024 * 1024) throw new Error('ZIP is over 100 MB; import stopped for browser safety.');
+            status.textContent = 'Opening ZIP and checking backup manifest...';
+            const JSZip = await loadBackupZipLibrary();
+            const zip = await JSZip.loadAsync(file, {checkCRC32:true});
+            const entries = Object.values(zip.files).filter(e => !e.dir);
+            if (entries.length > 1001) throw new Error('ZIP has more than 1000 files; import stopped.');
+            const manifestFile = zip.file('BACKUP_MANIFEST.json');
+            if (!manifestFile) throw new Error('BACKUP_MANIFEST.json is missing. This is not a supported Phase 5 full backup.');
+            const manifest = JSON.parse(await manifestFile.async('string'));
+            if (manifest.system !== 'I-JIN DR System' || manifest.type !== 'FULL_DR_JSON_BACKUP' || !Array.isArray(manifest.files))
+                throw new Error('Backup manifest format is not supported.');
+            if (manifest.files.length > 1000) throw new Error('Manifest lists more than 1000 files.');
+            if (manifest.expectedFiles !== manifest.files.length) throw new Error('Manifest expected file count does not match its entries.');
+            const jsonEntries = entries.filter(e => e.name !== 'BACKUP_MANIFEST.json');
+            if (jsonEntries.length !== manifest.files.length) throw new Error('ZIP file count differs from manifest.');
+            const manifestPaths = new Set();
+            const records = [];
+            let totalUncompressed = 0;
+            for (let i = 0; i < manifest.files.length; i++) {
+                const meta = manifest.files[i];
+                const path = String(meta.zipPath || '');
+                if (!path || path.startsWith('/') || path.includes('\\') || path.split('/').includes('..') || manifestPaths.has(path))
+                    throw new Error('Unsafe or duplicate ZIP path in manifest.');
+                manifestPaths.add(path);
+                const errors = [];
+                if (!BACKUP_SHOPS.includes(meta.shop) || !path.startsWith(backupSafeName(meta.shop) + '/')) errors.push('Shop/path mismatch');
+                if (!/\.json$/i.test(path)) errors.push('Not a JSON file');
+                const zipped = zip.file(path);
+                if (!zipped) { errors.push('Missing ZIP entry'); records.push({path, shop:meta.shop || '', drNumber:'', items:0, errors, data:null}); continue; }
+                const uncompressedSize = zipped._data && zipped._data.uncompressedSize;
+                if (!Number.isFinite(uncompressedSize) || uncompressedSize > 5 * 1024 * 1024) throw new Error('An entry is too large or has unknown size: ' + path);
+                totalUncompressed += uncompressedSize;
+                if (totalUncompressed > 100 * 1024 * 1024) throw new Error('Uncompressed backup exceeds 100 MB.');
+                let data = null, drNumber = '', shop = '', items = 0;
+                try {
+                    const raw = await zipped.async('string');
+                    if (new TextEncoder().encode(raw).length !== uncompressedSize) errors.push('File byte size mismatch');
+                    if (Number.isFinite(Number(meta.sizeBytes)) && Number(meta.sizeBytes) !== uncompressedSize) errors.push('Manifest size mismatch');
+                    data = JSON.parse(raw);
+                    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('JSON root must be an object');
+                    drNumber = String(data.drNumber || data.deliveryReceipt?.drNo || data.deliveryReceipt?.drNumber || '').trim();
+                    shop = String(data.shop || data.deliveryReceipt?.shopSelect || '').trim();
+                    items = Array.isArray(data.deliveryReceipt?.items) ? data.deliveryReceipt.items.length : (Array.isArray(data.items) ? data.items.length : 0);
+                    if (!drNumber) errors.push('Missing DR number');
+                    if (!BACKUP_SHOPS.includes(shop)) errors.push('Unknown/missing shop');
+                    if (shop !== meta.shop) errors.push('Shop differs from manifest');
+                    if (!Array.isArray(data.deliveryReceipt?.items) && !Array.isArray(data.items)) errors.push('Missing items array');
+                } catch (error) { errors.push('Invalid JSON: ' + error.message); data = null; }
+                records.push({path, shop:shop || meta.shop || '', drNumber, items, errors, data});
+                progress.value = Math.round((i + 1) / manifest.files.length * 100);
+            }
+            for (const item of jsonEntries) if (!manifestPaths.has(item.name)) throw new Error('ZIP contains an unlisted file: ' + item.name);
+            const seen = new Map(); let duplicates = 0;
+            for (const record of records) {
+                if (!record.drNumber || !record.shop) continue;
+                const key = record.shop.toLowerCase() + '\u0000' + record.drNumber.toLowerCase();
+                if (seen.has(key)) { record.errors.push('Duplicate shop + DR number'); seen.get(key).errors.push('Duplicate shop + DR number'); duplicates++; }
+                else seen.set(key, record);
+            }
+            backupImportState.records = records;
+            const tbody = document.getElementById('backupImportRows');
+            records.forEach((record, i) => {
+                const row = document.createElement('tr');
+                for (const value of [record.path,record.shop,record.drNumber,String(record.items),record.errors.length ? '❌ ' + [...new Set(record.errors)].join('; ') : '✅ Valid']) {
+                    const td = document.createElement('td'); td.textContent = value; td.style.overflowWrap = 'anywhere'; row.appendChild(td);
+                }
+                const td = document.createElement('td');
+                const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'btn-blue'; btn.textContent = 'Preview';
+                btn.disabled = !!record.errors.length; btn.addEventListener('click', () => previewBackupRecord(i));
+                td.appendChild(btn); row.appendChild(td); tbody.appendChild(row);
+            });
+            const invalid = records.filter(r => r.errors.length).length;
+            document.getElementById('backupImportTotal').textContent = records.length;
+            document.getElementById('backupImportValid').textContent = records.length - invalid;
+            document.getElementById('backupImportInvalid').textContent = invalid;
+            document.getElementById('backupImportDuplicate').textContent = duplicates;
+            document.getElementById('backupImportSummary').hidden = false;
+            document.getElementById('backupImportResults').hidden = false;
+            status.textContent = (invalid ? '⚠️ Validation completed with issues: ' : '✅ Validation completed: ') +
+                (records.length - invalid) + '/' + records.length + ' valid records. No Google Drive files changed.';
+        } catch (error) { status.textContent = '❌ Backup validation failed: ' + error.message; }
+        finally { input.disabled = false; progress.hidden = true; }
     }
 
     // The Google OAuth flow must be initiated and completed by the secure backend.
