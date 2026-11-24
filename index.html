@@ -224,7 +224,7 @@
 
       <div id="adminStaff" class="card admin-content"><h3>Staff Accounts</h3><p class="muted">Staff accounts are managed through the secure Cloudflare backend. Up to 9 active staff accounts.</p><form id="staffForm" class="staff-form"><label>Full name<input id="staffName" placeholder="Staff full name" required></label><label>Work email<input id="staffEmail" type="email" placeholder="staff\@company.com" required></label><label>Temporary password<input id="staffPassword" type="password" minlength="12" placeholder="At least 12 characters" required></label><button id="addStaffBtn" class="btn-green" type="submit">+ Add Staff</button></form><p id="adminError" role="alert"></p><button type="button" class="btn-blue" onclick="loadStaff()">↻ Refresh Staff List</button><div id="staffList" class="staff-list"></div></div>
 
-      <div id="adminRecords" class="card admin-content" hidden><h3>DR Records by Shop</h3><p class="muted">Counts reflect Google Drive after successful synchronization.</p><button class="btn-blue" onclick="adminRefreshCounts()">🔄 Refresh Counts</button><p id="adminCountStatus" class="muted" role="status"></p><div id="adminShopCounts" class="admin-shop-grid"></div><section class="card"><h3>Duplicate DR Monitoring — Phase 7I</h3><p class="muted">Read-only metadata and filename review. Does not inspect JSON contents or guarantee concurrent-save protection.</p><button id="dupRefresh7I" class="btn-blue">Scan Duplicate DRs</button> <button id="dupExport7I" class="btn-green" disabled>Export Duplicate Report (.xlsx)</button><p id="dupStatus7I" role="status">Not scanned.</p><pre id="dupRows7I" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></section></div>
+      <div id="adminRecords" class="card admin-content" hidden><h3>DR Records by Shop</h3><p class="muted">Counts reflect Google Drive after successful synchronization.</p><button class="btn-blue" onclick="adminRefreshCounts()">🔄 Refresh Counts</button><p id="adminCountStatus" class="muted" role="status"></p><div id="adminShopCounts" class="admin-shop-grid"></div><section class="card"><h3>Duplicate DR Monitoring — Phase 7I</h3><p class="muted">Read-only metadata and filename review. Does not inspect JSON contents or guarantee concurrent-save protection.</p><button id="dupRefresh7I" class="btn-blue">Scan Duplicate DRs</button> <button id="dupExport7I" class="btn-green" disabled>Export Duplicate Report (.xlsx)</button><p id="dupStatus7I" role="status">Not scanned.</p><pre id="dupRows7I" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre><div id="dupCompare7K"></div></section></div>
 
       <div id="adminActivity" class="card admin-content" hidden>
         <h3>Recent Activity</h3><p class="muted">Server-recorded login, logout, DR saving, staff management and password reset requests.</p>
@@ -1234,7 +1234,7 @@
     let dupData7I = null, dupOwner7I = null;
     document.getElementById('dupRefresh7I').addEventListener('click', async function(){
       const status=document.getElementById('dupStatus7I'), rows=document.getElementById('dupRows7I'), exp=document.getElementById('dupExport7I');
-      this.disabled=true; exp.disabled=true; dupData7I=null; rows.textContent=''; status.textContent='Scanning...';
+      this.disabled=true; exp.disabled=true; dupData7I=null; document.getElementById('dupCompare7K').replaceChildren(); rows.textContent=''; status.textContent='Scanning...';
       const owner=authUser?.uid;
       try {
         const d=await api('/api/admin/duplicates');
@@ -1242,7 +1242,7 @@
         dupData7I=d; dupOwner7I=owner;
         status.textContent=d.groups.length+' duplicate group(s); '+d.unresolved.length+' unidentified file(s). '+(d.partial?'PARTIAL listing.':'Listing complete within API scope.');
         rows.textContent=d.groups.map(g=>g.map(f=>f.shop+' | '+f.drNumber+' | '+f.name).join('\n')).join('\n\n') || 'No duplicates identified by metadata.';
-        exp.disabled=false;
+        exp.disabled=false; renderCompare7K(d);
       } catch(e){status.textContent='Scan failed: '+e.message;} finally {this.disabled=false;}
     });
     document.getElementById('dupExport7I').addEventListener('click',async function(){
@@ -1255,6 +1255,35 @@
       } catch(e){alert('Export failed: '+e.message);}
     });
 
+
+
+    function renderCompare7K(d) {
+      const root=document.getElementById('dupCompare7K'); root.replaceChildren();
+      const heading=document.createElement('h3'); heading.textContent='Duplicate DR Comparison — Phase 7K'; root.append(heading);
+      for(const group of d.groups){
+        const panel=document.createElement('section'); panel.className='card'; root.append(panel);
+        const label=document.createElement('p'); label.textContent=group[0].shop+' | '+group[0].drNumber; panel.append(label);
+        const selects=[0,1].map((initial)=>{const s=document.createElement('select'); s.setAttribute('aria-label',initial?'Record B':'Record A'); group.forEach((f,i)=>{const o=document.createElement('option');o.value=String(i);o.textContent=(i+1)+': '+f.name+' | '+f.id;s.append(o);});s.selectedIndex=initial;panel.append(s);return s;});
+        const btn=document.createElement('button');btn.className='btn-blue';btn.textContent='Compare Records';panel.append(btn);
+        const status=document.createElement('p');status.setAttribute('role','status');panel.append(status);
+        const grid=document.createElement('div');grid.style.cssText='display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px';panel.append(grid);
+        btn.onclick=async()=>{
+          if(userRole!=='admin'||authUser?.uid!==dupOwner7I||dupData7I!==d)return;
+          const owner=authUser.uid; grid.replaceChildren();
+          if(selects[0].value===selects[1].value){status.textContent='Choose two different records.';return;}
+          const files=selects.map(s=>group[Number(s.value)]);btn.disabled=true;selects.forEach(s=>s.disabled=true);status.textContent='Reading JSON records...';
+          try{
+            const data=await Promise.all(files.map(f=>api('/api/admin/backup/file?'+new URLSearchParams({shop:f.shop,id:f.id}))));
+            if(userRole!=='admin'||authUser?.uid!==owner||dupData7I!==d||!panel.isConnected)return;
+            if(data.some(x=>!x||typeof x!=='object'||Array.isArray(x)||!x.deliveryReceipt))throw new Error('Unexpected DR JSON structure.');
+            const canonical=x=>Array.isArray(x)?x.map(canonical):x&&typeof x==='object'?Object.fromEntries(Object.keys(x).sort().map(k=>[k,canonical(x[k])])):x;
+            const equal=(a,b)=>JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
+            status.textContent=equal(data[0],data[1])?'JSON contents identical.': 'JSON contents differ. Delivery receipt fields: '+(equal(data[0].deliveryReceipt,data[1].deliveryReceipt)?'identical':'different')+'. Review both records below.';
+            files.forEach((f,i)=>{const box=document.createElement('div');box.className='card';const title=document.createElement('h4');title.textContent='Record '+(i?'B':'A');box.append(title);const pre=document.createElement('pre');pre.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;max-height:500px;overflow:auto';pre.textContent=['File: '+f.name,'ID: '+f.id,'Created: '+(f.createdTime||'Unavailable'),'Modified: '+(f.modifiedTime||'Unavailable'),'Size: '+(f.size||'Unavailable')+' bytes','Saved by: '+(data[i].savedBy?.name||data[i].savedBy?.email||'Unavailable'),'','JSON contents:',JSON.stringify(data[i],null,2)].join('\n');box.append(pre);grid.append(box);});
+          }catch(e){status.textContent='Comparison failed: '+e.message;}finally{btn.disabled=false;selects.forEach(s=>s.disabled=false);}
+        };
+      }
+    }
 
     function showAdminWindow() {
 
