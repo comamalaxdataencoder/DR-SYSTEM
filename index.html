@@ -282,7 +282,7 @@
       <div id="adminBackup" class="card admin-content" hidden>
         <h3>💾 Admin Backup Center — Phase 6B</h3><section class="card" style="margin:16px 0"><h3>Backup Health &amp; Security Monitoring — Phase 7E</h3><p class="muted">Read-only ZIP inventory. File presence does not verify contents or the last scheduled execution.</p><div class="actions"><button type="button" class="btn-blue" id="monitorRefresh">Refresh Dashboard</button></div><p id="monitorStatus" role="status">Click Refresh Dashboard.</p><div id="monitorData"></div></section>
         <section class="card" style="margin:16px 0" aria-label="Backup execution monitoring">
-          <h3>🛡️ Backup Execution Monitoring — Phase 7F</h3>
+          <h3>🛡️ Backup Execution Monitoring — Phase 7G</h3>
           <p class="muted">Reported Apps Script executions. A successful report does not independently verify ZIP contents or email delivery.</p>
           <button type="button" class="btn-blue" id="executionRefresh">🔄 Refresh Executions</button>
           <p id="executionStatus" role="status" aria-live="polite">Click Refresh Executions.</p>
@@ -1311,6 +1311,22 @@
         if (!Array.isArray(d.executions)) throw new Error('Unexpected execution response.');
         const latest = d.executions[0];
         status.textContent = `${d.executions.length} execution report(s) loaded.` + (d.partial ? ' Partial history; some reports may be missing or invalid.' : '');
+        const alerts = [];
+        const now = Date.now();
+        const success = d.executions.find(e => e.stage === 'FINISHED' && ['SUCCESS','SUCCESS_WITH_WARNING'].includes(e.backupStatus));
+        const age = success ? (now-Date.parse(success.finishedAt))/3600000 : NaN;
+        if (!Number.isFinite(age) || age < 0) alerts.push('No recent successful execution can be confirmed.');
+        else if(age > 24) alerts.push('Last reported successful backup is older than 24 hours.');
+        if (!d.latestScheduled) alerts.push('Scheduled backup: no report found; check Apps Script Executions.');
+        else if (state(d.latestScheduled) !== 'SUCCESS') alerts.push('Scheduled backup: '+state(d.latestScheduled));
+        else if ((now-Date.parse(d.latestScheduled.finishedAt))/3600000 > 26) alerts.push('Scheduled success report is older than 26 hours.');
+        if(latest && latest.backupStatus === 'FAILED') alerts.push('Latest backup reported FAILED.');
+        if(latest && latest.emailStatus !== 'SENT') alerts.push('Latest email status: '+(latest.emailStatus || 'Unconfirmed'));
+        if(latest?.backupStatus === 'SUCCESS_WITH_WARNING') alerts.push('Latest backup reported a warning.');
+        if(d.partial) alerts.push('Execution history is partial.');
+        add('h3','Backup Health — '+(alerts.length?'ATTENTION REQUIRED':'NO REPORTED ISSUES')).style.color=alerts.length?'#fbbf24':'#34d399';
+        alerts.forEach(a=>add('p',a));
+        add('p','Report-based assessment only. ZIP integrity and email delivery are not independently verified.');
         const cards = add('div',''); cards.className = 'dash-stats';
         const metric = (label,value,detail,tint) => { const c=add('div','',cards); add('span',label,c); const v=add('strong',value,c); v.style.fontSize='20px'; if(tint)v.style.color=tint; add('span',detail,c); };
         metric('Last Manual Backup',state(d.latestManual),date(d.latestManual?.startedAt),color(state(d.latestManual)));
@@ -1320,6 +1336,21 @@
         add('p','Last reported scheduled success: '+date(d.latestScheduledSuccess?.finishedAt));
         add('p','Configured schedule: 12 AM–1 AM Philippine time. Missing reports do not establish whether a trigger ran.');
         add('h3','Backup Execution History');
+        const exportBtn=add('button','Export Execution History (.xlsx)'); exportBtn.type='button'; exportBtn.className='btn-green';
+        exportBtn.disabled=!d.executions.length;
+        exportBtn.addEventListener('click',async()=>{
+          if(!current())return;
+          exportBtn.disabled=true;
+          try {
+            await ensureDashboardXLSX(); if(!current())return;
+            const rows=[['Started (PH)','Finished (PH)','Type','Backup','Email','Records','ZIP Filename'],...d.executions.map(e=>[date(e.startedAt),date(e.finishedAt),e.type,state(e),e.emailStatus,e.records,e.filename].map(v=>String(v??'')))];
+            const book=XLSX.utils.book_new(), sheet=XLSX.utils.aoa_to_sheet(rows);
+            sheet['!cols']=[24,24,16,30,18,12,65].map(wch=>({wch}));
+            XLSX.utils.book_append_sheet(book,sheet,'Execution History');
+            XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['Scope','Loaded reports only'],['Partial history',d.partial?'Yes':'Not flagged'],['Integrity','Not independently verified']]),'Notes');
+            XLSX.writeFile(book,'IJIN_Backup_Executions_'+new Date().toISOString().slice(0,10)+'.xlsx');
+          }catch(e){if(current())alert('Export failed: '+e.message);}finally{if(current())exportBtn.disabled=false;}
+        });
         const wrap=add('div',''); wrap.className='table-responsive';
         const table=add('table','',wrap); table.className='dash-table';
         const head=add('tr','',add('thead','',table)); ['Started (PH)','Finished (PH)','Type','Backup','Email','Records','ZIP Filename'].forEach(v=>add('th',v,head));
@@ -1351,9 +1382,12 @@
         metric('Backup age',known?age.toFixed(1)+' hours':'Unavailable');
         metric('Backup files',String(d.count)+(d.partial?' (partial)':''));
         metric('ZIP storage',size(d.bytes));
-        metric('Scheduled execution','See Phase 7F');
+        metric('Scheduled execution','See Phase 7G');
+        const older=d.files.filter(f=>Number.isFinite(Date.parse(f.createdTime)) && Date.now()-Date.parse(f.createdTime)>30*86400000).length;
+        add('p','Retention monitoring (30-day reference): '+older+' listed ZIP(s) older than 30 days'+(d.partial?' (partial inventory)':'')+'. No files deleted by this dashboard.');
+        if(older) add('p','WARNING: Review older backups before any manual cleanup.').style.color='#fbbf24';
         add('p','Latest ZIP: '+(latest?date(latest.createdTime):'None'));
-        add('p','Configured schedule: 12 AM–1 AM Philippine time. See Phase 7F execution reports below; ZIP inventory alone cannot verify execution.');
+        add('p','Configured schedule: 12 AM–1 AM Philippine time. See Phase 7G execution reports below; ZIP inventory alone cannot verify execution.');
         add('p','Validation: use Choose Backup ZIP below. Results apply only to the selected file, not the latest ZIP automatically.');
         const usage=Number(d.storage?.usage),limit=Number(d.storage?.limit);
         const pct=d.storage?.usage!=null&&Number.isFinite(usage)&&usage>=0&&Number.isFinite(limit)&&limit>0?usage/limit*100:NaN;
