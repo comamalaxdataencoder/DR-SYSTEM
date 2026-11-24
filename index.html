@@ -288,6 +288,7 @@
           <p id="executionStatus" role="status" aria-live="polite">Click Refresh Executions.</p>
           <div id="executionData"></div>
         </section>
+<section class="card" style="margin:16px 0"><h3>Backup Integrity Verification — Phase 7H</h3><p class="muted">Read-only check of latest automatic ZIP against its own manifest. Does not prove completeness against live Drive or guarantee restore.</p><button type="button" class="btn-blue" id="integrityVerify">Verify Latest Backup</button><p id="integrityStatus" role="status">Not verified.</p><pre id="integrityReport" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></section>
         <p class="muted">Export metadata snapshots or download a ZIP containing actual DR JSON contents from all six shop folders. Only administrators can use these exports.</p>
         <div class="actions" style="margin:18px 0">
           <button type="button" id="backupManifestBtn" class="btn-green" onclick="exportBackupManifest()">📥 Export Backup Manifest (.json)</button>
@@ -1360,6 +1361,37 @@
       } catch(e) { if(current()){out.replaceChildren();status.style.color='#f87171';status.textContent='Execution monitoring failed: '+e.message;} }
       finally { if(current())btn.disabled=false; }
     }
+    document.getElementById('integrityVerify').addEventListener('click',async function(){
+      if(userRole!=='admin'||!authUser)return;
+      const user=authUser, btn=this, status=document.getElementById('integrityStatus'), out=document.getElementById('integrityReport');
+      const current=()=>authUser===user&&userRole==='admin';
+      btn.disabled=true;out.textContent='';status.textContent='Verifying latest ZIP...';status.style.color='';
+      try {
+        const token=await user.getIdToken();
+        const r=await fetch(API_BASE+'/api/admin/backup/latest-zip',{headers:{Authorization:'Bearer '+token},cache:'no-store'});
+        if(!r.ok)throw new Error((await r.json().catch(()=>({}))).error||'HTTP '+r.status);
+        const name=r.headers.get('X-Backup-Name')||'Latest ZIP';
+        const bytes=await r.arrayBuffer();if(bytes.byteLength>25*1024*1024)throw new Error('ZIP too large');
+        const Z=await loadBackupZipLibrary();const zip=await Z.loadAsync(bytes);
+        const entries=Object.values(zip.files).filter(e=>!e.dir);let size=0;
+        if(entries.length>1001)throw new Error('Too many entries');
+        for(const e of entries){const n=e._data?.uncompressedSize;if(!Number.isSafeInteger(n)||n<0||n>5*1024*1024)throw new Error('Unsafe entry size');size+=n;if(size>25*1024*1024)throw new Error('Expanded ZIP too large');if(e.unsafeOriginalName&&e.unsafeOriginalName!==e.name)throw new Error('Unsafe ZIP path');}
+        await Z.loadAsync(bytes,{checkCRC32:true});
+        const mf=zip.file('backup_manifest.json');if(!mf)throw new Error('Automatic backup manifest missing');
+        const m=JSON.parse(await mf.async('string'));if(!Array.isArray(m.records)||!Array.isArray(m.coverage)||!m.records.length||m.records.length>1000)throw new Error('Invalid manifest');
+        const issues=[], paths=new Set(), keys=new Map();let missing=0,invalid=0,duplicates=0;
+        for(const x of m.records){const path=x.path; if(typeof path!=='string'||!BACKUP_SHOPS.includes(x.shop)||!path.startsWith(x.shop+'/')||path.includes('\\')||path.split('/').length!==2||!path.endsWith('.json')||paths.has(path)){issues.push('Invalid or duplicate manifest path: '+String(path));invalid++;continue;}paths.add(path);
+          const e=zip.file(path);if(!e){missing++;issues.push('Missing: '+path);continue;}
+          try{const d=JSON.parse(await e.async('string'));if(!d||typeof d!=='object'||Array.isArray(d))throw new Error('Invalid JSON root');const shop=String(d.shop||d.deliveryReceipt?.shopSelect||'').trim(),dr=String(d.drNumber||d.deliveryReceipt?.drNo||d.deliveryReceipt?.drNumber||'').trim();if(shop!==x.shop||!dr||!Array.isArray(d.deliveryReceipt?.items??d.items))throw new Error('Invalid DR fields or shop mismatch');if(d.deliveryReceipt?.shopSelect&&d.deliveryReceipt.shopSelect!==shop)throw new Error('Conflicting shop');for(const v of [d.deliveryReceipt?.drNo,d.deliveryReceipt?.drNumber])if(v&&String(v).trim().toLowerCase()!==dr.toLowerCase())throw new Error('Conflicting DR number');const k=shop.toLowerCase()+'\u0000'+dr.toLowerCase();if(keys.has(k)){duplicates++;issues.push('Duplicate DR: '+shop+' / '+dr);}else keys.set(k,path);
+          }catch(e){invalid++;issues.push(path+': '+e.message);}}
+        const actual=entries.filter(e=>e.name!=='backup_manifest.json');const extra=actual.filter(e=>!paths.has(e.name));for(const e of extra)issues.push('Unlisted entry: '+e.name);
+        if(m.coverage.length!==BACKUP_SHOPS.length||BACKUP_SHOPS.some(s=>{const c=m.coverage.filter(x=>x.shop===s);return c.length!==1||c[0].count!==m.records.filter(x=>x.shop===s).length;}))issues.push('Manifest shop coverage mismatch');
+        if(actual.length!==m.records.length)issues.push('Record count mismatch');
+        if(!current())return;
+        const failed=missing||invalid||extra.length||issues.length>duplicates;const state=failed?'FAILED':duplicates?'WARNING':'PASSED';status.textContent='Integrity: '+state;status.style.color=failed?'#f87171':duplicates?'#fbbf24':'#34d399';
+        out.textContent=['ZIP: '+name,'Verified (PH): '+new Date().toLocaleString('en-PH',{timeZone:'Asia/Manila'}),'Expected records: '+m.records.length,'Actual entries: '+actual.length,'Missing: '+missing,'Invalid: '+invalid,'Duplicate DR occurrences: '+duplicates,'Unlisted: '+extra.length,'CRC32 check: passed',...issues,'No Drive files changed.'].join('\n');
+      }catch(e){if(current()){status.textContent='Verification failed: '+e.message;status.style.color='#f87171';}}finally{btn.disabled=false;}
+    });
     document.getElementById('executionRefresh').addEventListener('click',loadBackupExecutions);
     document.getElementById('monitorRefresh').addEventListener('click', async function(){
       if(userRole!=='admin') return;
