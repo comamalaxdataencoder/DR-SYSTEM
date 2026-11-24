@@ -280,7 +280,7 @@
       </div>
 
       <div id="adminBackup" class="card admin-content" hidden>
-        <h3>💾 Admin Backup Center — Phase 6B</h3><section class="card" style="margin:16px 0"><h3>Backup Monitoring — Phase 7D</h3><p class="muted">Read-only ZIP inventory. File presence does not verify contents or the last scheduled execution.</p><div class="actions"><button type="button" class="btn-blue" id="monitorRefresh">Refresh Dashboard</button></div><p id="monitorStatus" role="status">Click Refresh Dashboard.</p><div id="monitorData"></div></section>
+        <h3>💾 Admin Backup Center — Phase 6B</h3><section class="card" style="margin:16px 0"><h3>Backup Health &amp; Security Monitoring — Phase 7E</h3><p class="muted">Read-only ZIP inventory. File presence does not verify contents or the last scheduled execution.</p><div class="actions"><button type="button" class="btn-blue" id="monitorRefresh">Refresh Dashboard</button></div><p id="monitorStatus" role="status">Click Refresh Dashboard.</p><div id="monitorData"></div></section>
         <p class="muted">Export metadata snapshots or download a ZIP containing actual DR JSON contents from all six shop folders. Only administrators can use these exports.</p>
         <div class="actions" style="margin:18px 0">
           <button type="button" id="backupManifestBtn" class="btn-green" onclick="exportBackupManifest()">📥 Export Backup Manifest (.json)</button>
@@ -1281,7 +1281,7 @@
     document.getElementById('monitorRefresh').addEventListener('click', async function(){
       if(userRole!=='admin') return;
       const btn=this, status=document.getElementById('monitorStatus'), out=document.getElementById('monitorData');
-      btn.disabled=true; out.replaceChildren(); status.textContent='Loading backup inventory...';
+      btn.disabled=true; out.replaceChildren(); status.style.color=''; status.textContent='Loading backup inventory...';
       const add=(tag,value,parent=out)=>{const e=document.createElement(tag);e.textContent=value;parent.appendChild(e);return e;};
       const date=v=>new Date(v).toLocaleString('en-PH',{timeZone:'Asia/Manila'});
       const size=v=>Number.isFinite(Number(v))&&v!=null?(Number(v)/1024).toFixed(2)+' KB':'Unavailable';
@@ -1289,15 +1289,28 @@
         const d=await api('/api/admin/backup/monitor');
         if(userRole!=='admin') return;
         const latest=d.files[0];
-        status.textContent=latest?(Date.now()-Date.parse(latest.createdTime)>26*3600000?'WARNING: No recent backup ZIP (over 26 hours).':'Recent backup ZIP found. Contents not verified.'):'No matching backup ZIP found.';
+        const age=latest?(Date.now()-Date.parse(latest.createdTime))/3600000:NaN;
+        const known=Number.isFinite(age)&&age>=0;
+        const state=!latest?'NO ZIP FOUND':!known?'AGE UNKNOWN':age>48?'CRITICAL — ZIP older than 48 hours':age>24?'WARNING — ZIP older than 24 hours':'RECENT ZIP — contents unverified';
+        status.textContent=state+(d.partial?' | Partial inventory':'');
+        status.style.color=!latest||(known&&age>48)?'#f87171':!known||age>24?'#fbbf24':'#34d399';
+        const cards=add('div','');cards.className='dash-stats';
+        const metric=(label,value)=>{const c=add('div','',cards);add('span',label,c);add('strong',value,c);};
+        metric('Backup age',known?age.toFixed(1)+' hours':'Unavailable');
+        metric('Backup files',String(d.count)+(d.partial?' (partial)':''));
+        metric('ZIP storage',size(d.bytes));
+        metric('Scheduled execution','Unverified');
         add('p','Latest ZIP: '+(latest?date(latest.createdTime):'None'));
-        add('p','Configured schedule: 12 AM–1 AM Philippine time (trigger not verified here).');
-        add('p','Backup files: '+d.count+' | Storage: '+size(d.bytes)+(d.partial?' (partial listing)':''));
-        add('p','Drive usage: '+size(d.storage?.usage)+' / '+size(d.storage?.limit));
+        add('p','Configured schedule: 12 AM–1 AM Philippine time. Last scheduled success/failure is not available from this inventory. Check Apps Script Executions.');
+        add('p','Validation: use Choose Backup ZIP below. Results apply only to the selected file, not the latest ZIP automatically.');
+        const usage=Number(d.storage?.usage),limit=Number(d.storage?.limit);
+        const pct=d.storage?.usage!=null&&Number.isFinite(usage)&&usage>=0&&Number.isFinite(limit)&&limit>0?usage/limit*100:NaN;
+        add('p','Drive usage: '+size(d.storage?.usage)+' / '+size(d.storage?.limit)+(Number.isFinite(pct)?' ('+pct.toFixed(2)+'%)':''));
+        if(Number.isFinite(pct)){const bar=add('progress','');bar.max=100;bar.value=Math.min(100,pct);bar.style.width='100%';bar.setAttribute('aria-label','Drive storage usage');if(pct>=80)add('p','WARNING: Drive storage usage is at least 80%.');}
         const link=add('a','Open Backup Folder');link.href='https://drive.google.com/drive/folders/'+encodeURIComponent(d.folderId);link.target='_blank';link.rel='noopener noreferrer';
         const table=add('table','');table.className='dash-table';const head=add('tr','',table);['Date (PH)','Filename','Size','Open'].forEach(v=>add('th',v,head));
         for(const f of d.files){const row=add('tr','',table);[date(f.createdTime),f.name,size(f.size)].forEach(v=>add('td',v,row));const a=add('a','Open ZIP',add('td','',row));a.href='https://drive.google.com/file/d/'+encodeURIComponent(f.id)+'/view';a.target='_blank';a.rel='noopener noreferrer';}
-      }catch(e){status.textContent='Monitoring failed: '+e.message;}finally{btn.disabled=false;}
+      }catch(e){status.style.color='#f87171';status.textContent='Monitoring failed: '+e.message;}finally{btn.disabled=false;}
     });
     async function exportBackupManifest() {
         if (userRole !== 'admin') { alert('Administrator access required.'); return; }
