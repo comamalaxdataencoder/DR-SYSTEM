@@ -281,6 +281,13 @@
 
       <div id="adminBackup" class="card admin-content" hidden>
         <h3>💾 Admin Backup Center — Phase 6B</h3><section class="card" style="margin:16px 0"><h3>Backup Health &amp; Security Monitoring — Phase 7E</h3><p class="muted">Read-only ZIP inventory. File presence does not verify contents or the last scheduled execution.</p><div class="actions"><button type="button" class="btn-blue" id="monitorRefresh">Refresh Dashboard</button></div><p id="monitorStatus" role="status">Click Refresh Dashboard.</p><div id="monitorData"></div></section>
+        <section class="card" style="margin:16px 0" aria-label="Backup execution monitoring">
+          <h3>🛡️ Backup Execution Monitoring — Phase 7F</h3>
+          <p class="muted">Reported Apps Script executions. A successful report does not independently verify ZIP contents or email delivery.</p>
+          <button type="button" class="btn-blue" id="executionRefresh">🔄 Refresh Executions</button>
+          <p id="executionStatus" role="status" aria-live="polite">Click Refresh Executions.</p>
+          <div id="executionData"></div>
+        </section>
         <p class="muted">Export metadata snapshots or download a ZIP containing actual DR JSON contents from all six shop folders. Only administrators can use these exports.</p>
         <div class="actions" style="margin:18px 0">
           <button type="button" id="backupManifestBtn" class="btn-green" onclick="exportBackupManifest()">📥 Export Backup Manifest (.json)</button>
@@ -1266,6 +1273,7 @@
         }
 
         if (tab === 'settings') checkCompanyDrive();
+        if (tab === 'backup') loadBackupExecutions();
         if (tab === 'dashboard') { renderActivityDashboard(); loadActivity(); }
 
     }
@@ -1278,6 +1286,50 @@
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 3000);
     }
+    // Phase 7F: authenticated, read-only execution reports.
+    let executionRequest = 0;
+    function clearExecutionView() {
+      executionRequest++;
+      document.getElementById('executionData').replaceChildren();
+      const status = document.getElementById('executionStatus');
+      status.textContent = 'Click Refresh Executions.'; status.style.color = '';
+      document.getElementById('executionRefresh').disabled = false;
+    }
+    async function loadBackupExecutions() {
+      if (userRole !== 'admin' || !authUser) return;
+      const user = authUser, requestId = ++executionRequest;
+      const current = () => requestId === executionRequest && authUser === user && userRole === 'admin';
+      const btn = document.getElementById('executionRefresh'), status = document.getElementById('executionStatus'), out = document.getElementById('executionData');
+      btn.disabled = true; out.replaceChildren(); status.style.color = ''; status.textContent = 'Loading execution reports...';
+      const add = (tag, value, parent = out) => { const el = document.createElement(tag); el.textContent = String(value ?? '—'); parent.appendChild(el); return el; };
+      const date = v => v && Number.isFinite(Date.parse(v)) ? new Date(v).toLocaleString('en-PH',{timeZone:'Asia/Manila'}) : '—';
+      const state = e => !e ? 'No report found' : e.stage !== 'FINISHED' ? 'Started — outcome unconfirmed' : e.backupStatus;
+      const color = v => v === 'SUCCESS' || v === 'SENT' ? '#34d399' : v === 'FAILED' ? '#f87171' : '#fbbf24';
+      try {
+        const d = await api('/api/admin/backup/executions');
+        if (!current()) return;
+        if (!Array.isArray(d.executions)) throw new Error('Unexpected execution response.');
+        const latest = d.executions[0];
+        status.textContent = `${d.executions.length} execution report(s) loaded.` + (d.partial ? ' Partial history; some reports may be missing or invalid.' : '');
+        const cards = add('div',''); cards.className = 'dash-stats';
+        const metric = (label,value,detail,tint) => { const c=add('div','',cards); add('span',label,c); const v=add('strong',value,c); v.style.fontSize='20px'; if(tint)v.style.color=tint; add('span',detail,c); };
+        metric('Last Manual Backup',state(d.latestManual),date(d.latestManual?.startedAt),color(state(d.latestManual)));
+        metric('Last Scheduled Backup',state(d.latestScheduled),date(d.latestScheduled?.startedAt),color(state(d.latestScheduled)));
+        metric('Latest Email Notification',latest?.emailStatus ?? 'No report found',date(latest?.finishedAt),color(latest?.emailStatus));
+        metric('Latest Reported DR Records',latest?.records ?? '—',latest?.type ?? 'No report found');
+        add('p','Last reported scheduled success: '+date(d.latestScheduledSuccess?.finishedAt));
+        add('p','Configured schedule: 12 AM–1 AM Philippine time. Missing reports do not establish whether a trigger ran.');
+        add('h3','Backup Execution History');
+        const wrap=add('div',''); wrap.className='table-responsive';
+        const table=add('table','',wrap); table.className='dash-table';
+        const head=add('tr','',add('thead','',table)); ['Started (PH)','Finished (PH)','Type','Backup','Email','Records','ZIP Filename'].forEach(v=>add('th',v,head));
+        const body=add('tbody','',table);
+        for(const e of d.executions){ const row=add('tr','',body); [date(e.startedAt),date(e.finishedAt),e.type,state(e),e.emailStatus,e.records,e.filename].forEach((v,i)=>{const cell=add('td',v,row); if(i===3||i===4)cell.style.color=color(v);}); }
+        if(!d.executions.length){const cell=add('td','No execution reports found.',add('tr','',body));cell.colSpan=7;}
+      } catch(e) { if(current()){out.replaceChildren();status.style.color='#f87171';status.textContent='Execution monitoring failed: '+e.message;} }
+      finally { if(current())btn.disabled=false; }
+    }
+    document.getElementById('executionRefresh').addEventListener('click',loadBackupExecutions);
     document.getElementById('monitorRefresh').addEventListener('click', async function(){
       if(userRole!=='admin') return;
       const btn=this, status=document.getElementById('monitorStatus'), out=document.getElementById('monitorData');
@@ -1299,9 +1351,9 @@
         metric('Backup age',known?age.toFixed(1)+' hours':'Unavailable');
         metric('Backup files',String(d.count)+(d.partial?' (partial)':''));
         metric('ZIP storage',size(d.bytes));
-        metric('Scheduled execution','Unverified');
+        metric('Scheduled execution','See Phase 7F');
         add('p','Latest ZIP: '+(latest?date(latest.createdTime):'None'));
-        add('p','Configured schedule: 12 AM–1 AM Philippine time. Last scheduled success/failure is not available from this inventory. Check Apps Script Executions.');
+        add('p','Configured schedule: 12 AM–1 AM Philippine time. See Phase 7F execution reports below; ZIP inventory alone cannot verify execution.');
         add('p','Validation: use Choose Backup ZIP below. Results apply only to the selected file, not the latest ZIP automatically.');
         const usage=Number(d.storage?.usage),limit=Number(d.storage?.limit);
         const pct=d.storage?.usage!=null&&Number.isFinite(usage)&&usage>=0&&Number.isFinite(limit)&&limit>0?usage/limit*100:NaN;
@@ -2368,7 +2420,7 @@
 
             auth.onAuthStateChanged(firebaseAuth,async user=>{
 
-                authUser=user;document.getElementById('authOverlay').hidden=false;document.getElementById('appShell').hidden=true;document.getElementById('authError').textContent='';
+                clearExecutionView();authUser=user;document.getElementById('authOverlay').hidden=false;document.getElementById('appShell').hidden=true;document.getElementById('authError').textContent='';
 
                 document.getElementById('adminWindow').hidden=true;document.getElementById('encodingWindow').hidden=true;document.getElementById('adminBtn').hidden=true;document.getElementById('encodingBtn').hidden=true;userRole=null;
 
