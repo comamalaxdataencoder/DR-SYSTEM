@@ -224,7 +224,7 @@
 
       <div id="adminStaff" class="card admin-content"><h3>Staff Accounts</h3><p class="muted">Staff accounts are managed through the secure Cloudflare backend. Up to 9 active staff accounts.</p><form id="staffForm" class="staff-form"><label>Full name<input id="staffName" placeholder="Staff full name" required></label><label>Work email<input id="staffEmail" type="email" placeholder="staff\@company.com" required></label><label>Temporary password<input id="staffPassword" type="password" minlength="12" placeholder="At least 12 characters" required></label><button id="addStaffBtn" class="btn-green" type="submit">+ Add Staff</button></form><p id="adminError" role="alert"></p><button type="button" class="btn-blue" onclick="loadStaff()">↻ Refresh Staff List</button><div id="staffList" class="staff-list"></div></div>
 
-      <div id="adminRecords" class="card admin-content" hidden><h3>DR Records by Shop</h3><p class="muted">Counts reflect Google Drive after successful synchronization.</p><button class="btn-blue" onclick="adminRefreshCounts()">🔄 Refresh Counts</button><p id="adminCountStatus" class="muted" role="status"></p><div id="adminShopCounts" class="admin-shop-grid"></div></div>
+      <div id="adminRecords" class="card admin-content" hidden><h3>DR Records by Shop</h3><p class="muted">Counts reflect Google Drive after successful synchronization.</p><button class="btn-blue" onclick="adminRefreshCounts()">🔄 Refresh Counts</button><p id="adminCountStatus" class="muted" role="status"></p><div id="adminShopCounts" class="admin-shop-grid"></div><section class="card"><h3>Duplicate DR Monitoring — Phase 7I</h3><p class="muted">Read-only metadata and filename review. Does not inspect JSON contents or guarantee concurrent-save protection.</p><button id="dupRefresh7I" class="btn-blue">Scan Duplicate DRs</button> <button id="dupExport7I" class="btn-green" disabled>Export Duplicate Report (.xlsx)</button><p id="dupStatus7I" role="status">Not scanned.</p><pre id="dupRows7I" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></section></div>
 
       <div id="adminActivity" class="card admin-content" hidden>
         <h3>Recent Activity</h3><p class="muted">Server-recorded login, logout, DR saving, staff management and password reset requests.</p>
@@ -1230,6 +1230,31 @@
     }
 
     let userRole = null;
+
+    let dupData7I = null, dupOwner7I = null;
+    document.getElementById('dupRefresh7I').addEventListener('click', async function(){
+      const status=document.getElementById('dupStatus7I'), rows=document.getElementById('dupRows7I'), exp=document.getElementById('dupExport7I');
+      this.disabled=true; exp.disabled=true; dupData7I=null; rows.textContent=''; status.textContent='Scanning...';
+      const owner=authUser?.uid;
+      try {
+        const d=await api('/api/admin/duplicates');
+        if (!owner || authUser?.uid!==owner || userRole!=='admin') return;
+        dupData7I=d; dupOwner7I=owner;
+        status.textContent=d.groups.length+' duplicate group(s); '+d.unresolved.length+' unidentified file(s). '+(d.partial?'PARTIAL listing.':'Listing complete within API scope.');
+        rows.textContent=d.groups.map(g=>g.map(f=>f.shop+' | '+f.drNumber+' | '+f.name).join('\n')).join('\n\n') || 'No duplicates identified by metadata.';
+        exp.disabled=false;
+      } catch(e){status.textContent='Scan failed: '+e.message;} finally {this.disabled=false;}
+    });
+    document.getElementById('dupExport7I').addEventListener('click',async function(){
+      if (!dupData7I || userRole!=='admin' || authUser?.uid!==dupOwner7I) return;
+      try { await ensureDashboardXLSX(); if(userRole!=='admin'||authUser?.uid!==dupOwner7I)return;
+        const d=dupData7I, book=XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['Shop','DR Number','Filename','File ID'],...d.groups.flat().map(f=>[f.shop,f.drNumber,f.name,f.id])]),'Duplicates');
+        XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['Partial listing',String(d.partial)],['Scope','Metadata and filenames only'],['Unidentified files',d.unresolved.length],...d.unresolved.map(f=>[f.shop,f.name])]),'Notes');
+        XLSX.writeFile(book,'IJIN_Duplicate_DR_Report.xlsx');
+      } catch(e){alert('Export failed: '+e.message);}
+    });
+
 
     function showAdminWindow() {
 
