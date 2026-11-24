@@ -9,6 +9,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <title>I-JIN International Inc. - Delivery Receipt System</title>
+    <link rel="icon" href="data:,">
 
     
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -289,7 +290,7 @@
         <p id="backupStatus" class="muted" role="status" aria-live="polite">Ready. Only administrators can export.</p>
         <progress id="backupProgress" max="100" value="0" hidden style="width:100%;margin:10px 0"></progress>
         <section class="card" aria-label="Phase 6A backup validation" style="margin-top:18px">
-          <h3>📂 Phase 6B — Validate, Select &amp; Check Restore Conflicts</h3>
+          <h3>📂 Phase 6B.1 — Validate, Select &amp; Check Restore Conflicts</h3>
           <p class="muted">Choose a Full DR Backup ZIP exported by this system. Validation runs locally in your browser. No files are uploaded or restored to Google Drive.</p>
           <div class="actions" style="margin:12px 0">
             <label for="backupImportFile" class="file-upload-btn btn-blue">📂 Choose Backup ZIP</label>
@@ -305,19 +306,19 @@
             <div><span>Duplicate DR Keys</span><strong id="backupImportDuplicate">0</strong></div>
           </div>
           <div id="backupImportResults" hidden>
-            <div class="table-responsive"><table class="dash-table"><thead><tr><th>Select</th><th>ZIP File</th><th>Shop</th><th>DR Number</th><th>Items</th><th>Validation</th><th>Action</th></tr></thead><tbody id="backupImportRows"></tbody></table></div>
             <section class="card" style="margin-top:14px" aria-label="Phase 6B restore preparation">
               <h3>🛡️ Phase 6B — Safe Restore Preparation</h3>
               <p class="muted">Select valid records, then compare them against existing Drive filenames and DR metadata. This is a read-only check. Restore remains disabled until a secure, server-verified restore endpoint is deployed.</p>
               <div class="actions" style="margin:12px 0">
-                <button type="button" class="btn-indigo" onclick="selectValidBackupRecords(true)">Select Valid</button>
-                <button type="button" class="btn-indigo" onclick="selectValidBackupRecords(false)">Deselect All</button>
-                <button type="button" id="backupCheckBtn" class="btn-blue" onclick="checkBackupRestoreConflicts()">🔍 Check Existing DRs</button>
+                <button type="button" class="btn-indigo" id="backupSelectValidBtn">Select Valid</button>
+                <button type="button" class="btn-indigo" id="backupDeselectBtn">Deselect All</button>
+                <button type="button" id="backupCheckBtn" class="btn-blue" >🔍 Check Existing DRs</button>
                 <button type="button" class="btn-teal" disabled title="Requires secure backend restore endpoint">🔒 Restore Selected (Not Enabled)</button>
               </div>
               <p id="backupRestoreStatus" class="muted" role="status" aria-live="polite">Import a backup ZIP to begin.</p>
               <div id="backupRestoreReport" class="table-responsive" hidden></div>
             </section>
+            <div class="table-responsive"><table class="dash-table"><thead><tr><th>Select</th><th>ZIP File</th><th>Shop</th><th>DR Number</th><th>Items</th><th>Validation</th><th>Action</th></tr></thead><tbody id="backupImportRows"></tbody></table></div>
             <h3 style="margin-top:18px">Read-only DR Preview</h3>
             <pre id="backupImportPreview" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:420px;overflow:auto;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:14px;font-size:12px">Select Preview on a valid record.</pre>
           </div>
@@ -1437,7 +1438,9 @@
         if (userRole !== 'admin') return;
         const entry = backupImportState.records[index];
         if (!entry || !entry.data || entry.errors.length) return;
-        document.getElementById('backupImportPreview').textContent = JSON.stringify(entry.data, null, 2);
+        const preview = document.getElementById('backupImportPreview');
+        preview.textContent = JSON.stringify(entry.data, null, 2);
+        preview.scrollIntoView({block:'start', behavior:'smooth'});
     }
     async function validateBackupZip(file) {
         if (userRole !== 'admin') { alert('Administrator access required.'); return; }
@@ -1518,7 +1521,7 @@
                 const selection = document.createElement('td');
                 const checkbox = document.createElement('input'); checkbox.type='checkbox'; checkbox.disabled=!!record.errors.length;
                 checkbox.setAttribute('aria-label','Select DR '+record.drNumber+' from '+record.shop);
-                checkbox.addEventListener('change',()=>{if(checkbox.checked)backupImportState.checked.add(i);else backupImportState.checked.delete(i); backupImportState.checkedConflicts=null; document.getElementById('backupRestoreStatus').textContent='Selection changed. Recheck existing DRs before restore.';});
+                checkbox.addEventListener('change',()=>{if(checkbox.checked)backupImportState.checked.add(i);else backupImportState.checked.delete(i); backupImportState.checkedConflicts=null; document.getElementById('backupRestoreReport').hidden=true; document.getElementById('backupRestoreStatus').textContent=backupImportState.checked.size+' valid record(s) selected. Recheck existing DRs before restore.';});
                 selection.appendChild(checkbox);row.appendChild(selection);
                 for (const value of [record.path,record.shop,record.drNumber,String(record.items),record.errors.length ? '❌ ' + [...new Set(record.errors)].join('; ') : '✅ Valid']) {
                     const td = document.createElement('td'); td.textContent = value; td.style.overflowWrap = 'anywhere'; row.appendChild(td);
@@ -2578,6 +2581,9 @@
 
 
 
+    document.getElementById("backupSelectValidBtn").addEventListener("click", () => selectValidBackupRecords(true));
+    document.getElementById("backupDeselectBtn").addEventListener("click", () => selectValidBackupRecords(false));
+    document.getElementById("backupCheckBtn").addEventListener("click", checkBackupRestoreConflicts);
     loadDraft();
 
     renderShopGallery();
