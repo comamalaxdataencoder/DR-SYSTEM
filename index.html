@@ -1218,7 +1218,7 @@
 
             alert('Saved to company Google Drive!\nFile: ' + result.name);
 
-        } catch(e) {alert('Save failed: ' + e.message)} finally {btn.disabled=false}
+        } catch(e) {alert(/duplicate DR|pending save/i.test(e.message) ? 'DUPLICATE DR WARNING\n'+e.message : 'Save failed: '+e.message)} finally {btn.disabled=false}
 
     }
 
