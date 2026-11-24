@@ -307,13 +307,13 @@
           </div>
           <div id="backupImportResults" hidden>
             <section class="card" style="margin-top:14px" aria-label="Phase 6B restore preparation">
-              <h3>🛡️ Phase 6B — Safe Restore Preparation</h3>
-              <p class="muted">Select valid records, then compare them against existing Drive filenames and DR metadata. This is a read-only check. Restore remains disabled until a secure, server-verified restore endpoint is deployed.</p>
+              <h3>🛡️ Phase 6C — Secure Restore Preparation</h3>
+              <p class="muted">Select valid records, then compare them against existing Drive filenames and DR metadata. This is a read-only check. Restore creates new files only after server checks. Pause all DR encoding and Drive edits during restore.</p>
               <div class="actions" style="margin:12px 0">
                 <button type="button" class="btn-indigo" id="backupSelectValidBtn">Select Valid</button>
                 <button type="button" class="btn-indigo" id="backupDeselectBtn">Deselect All</button>
                 <button type="button" id="backupCheckBtn" class="btn-blue" >🔍 Check Existing DRs</button>
-                <button type="button" class="btn-teal" disabled title="Requires secure backend restore endpoint">🔒 Restore Selected (Not Enabled)</button>
+                <button type="button" class="btn-teal" id="restoreSelectedBtn">Restore Selected</button>
               </div>
               <p id="backupRestoreStatus" class="muted" role="status" aria-live="polite">Import a backup ZIP to begin.</p>
               <div id="backupRestoreReport" class="table-responsive" hidden></div>
@@ -2583,6 +2583,31 @@
 
     document.getElementById("backupSelectValidBtn").addEventListener("click", () => selectValidBackupRecords(true));
     document.getElementById("backupDeselectBtn").addEventListener("click", () => selectValidBackupRecords(false));
+
+    async function restoreSelectedBackup() {
+        const status=document.getElementById('backupRestoreStatus');
+        if(userRole!=='admin') return;
+        const checked=backupImportState.checkedConflicts;
+        const selected=[...backupImportState.checked].map(i=>backupImportState.records[i]);
+        if(!checked || !selected.length || checked.length!==selected.length || selected.some(r=>!checked.some(c=>c.record===r))) {status.textContent='Run Check Existing DRs first.';return;}
+        if(!confirm('Restore '+selected.length+' selected records? Existing matches will be skipped. Confirm all staff encoding and Drive edits are paused.')) return;
+        const controls=[...document.querySelectorAll('#adminBackup button,#adminBackup input')].filter(e=>!e.disabled);
+        controls.forEach(e=>e.disabled=true);
+        const results=[];
+        try {
+            for(const r of selected){
+                status.textContent='Processing '+(results.length+1)+' / '+selected.length+' — '+r.drNumber;
+                try {const x=await api('/api/admin/backup/restore',{method:'POST',body:JSON.stringify(r.data)});results.push([r.shop,r.drNumber,x.status,x.auditLogged===false?'Audit log failed':(x.message||'')]);}
+                catch(e){results.push([r.shop,r.drNumber,'failed / verify Drive',e.message]);break;}
+            }
+            const report=document.getElementById('backupRestoreReport');report.replaceChildren();report.hidden=false;
+            const table=document.createElement('table');table.className='dash-table';
+            for(const values of [['Shop','DR Number','Result','Details'],...results]){const tr=document.createElement('tr');for(const v of values){const td=document.createElement('td');td.textContent=v;tr.appendChild(td);}table.appendChild(tr);}report.appendChild(table);
+            status.textContent='Restore finished: '+results.filter(r=>r[2]==='restored').length+' restored, '+results.filter(r=>r[2]==='skipped').length+' skipped, '+results.filter(r=>r[2].startsWith('failed')).length+' failed, '+(selected.length-results.length)+' not attempted. Recheck before retrying.';
+        } finally {controls.forEach(e=>e.disabled=false);backupImportState.checkedConflicts=null;}
+    }
+    document.getElementById('restoreSelectedBtn').addEventListener('click',restoreSelectedBackup);
+
     document.getElementById("backupCheckBtn").addEventListener("click", checkBackupRestoreConflicts);
     loadDraft();
 
