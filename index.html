@@ -168,6 +168,12 @@
 
     @media(max-width:900px){.admin-stats{grid-template-columns:repeat(2,1fr)}.staff-form{grid-template-columns:1fr 1fr}}@media(max-width:600px){.admin-stats,.staff-form{grid-template-columns:1fr}.admin-heading{align-items:start;flex-direction:column}}
 
+#itemsTable { min-width: 1650px; }
+#itemsTable th:nth-child(2) { min-width: 250px; }
+#itemsTable th:nth-child(5) { min-width: 155px; }
+#itemsTable th:nth-child(13) { min-width: 145px; }
+#itemsTable td input, #itemsTable td textarea { padding: 5px 3px; }
+@media print { #itemsTable { min-width: 0; table-layout: fixed; } #itemsTable th { min-width: 0 !important; overflow-wrap: anywhere; } }
 </style>
 
 
@@ -607,7 +613,7 @@
 
     <div class="card">
 
-        <div class="card-title">Line Items</div>
+        <div class="card-title">Line Items <span>Scroll horizontally to view all 13 fields →</span></div>
 
         <div class="table-responsive">
 
@@ -621,14 +627,20 @@
 
                         <th>Item Description</th>
 
+                        <th>Expiry Date</th>
+                        <th>Batch Code</th>
+                        <th>Barcode</th>
+                        <th>SKU Offline</th>
+                        <th>Unit</th>
                         <th>Qty</th>
 
                         <th>Unit Price</th>
 
                         <th>Final Amount</th>
 
-                        <th>Remarks</th>
-
+                        <th>Received Quantity</th>
+                        <th>Remarks / Notes</th>
+                        <th>Batch Expiry Status</th>
                         <th>Action</th>
 
                     </tr>
@@ -868,23 +880,34 @@
 
 
         tr.innerHTML = `
-
-            <td><input type="text" class="item-code" value="${code}" oninput="lookupItem(this); autoSaveDraft();"></td>
-
-            <td><textarea class="item-desc" oninput="autoResize(this); autoSaveDraft();">${desc}</textarea></td>
-
-            <td><input type="number" class="item-qty" value="${qty}" oninput="calculateTotals()"></td>
-
-            <td><input type="number" class="item-price" value="${price}" oninput="calculateTotals()"></td>
-
-            <td><input type="number" class="item-amount" value="${data.Final_Amount || '0.00'}" readonly></td>
-
-            <td><input type="text" class="item-remarks" value="${data.Remarks || 'NO ISSUES'}" oninput="autoSaveDraft()"></td>
-
-            <td><button class="btn-del" onclick="deleteRow(this)">Remove</button></td>
-
-        `;
-
+<td><input type="text" class="item-code" aria-label="code" oninput="lookupItem(this); autoSaveDraft();"></td>
+<td><textarea class="item-desc" aria-label="desc" oninput="autoResize(this); autoSaveDraft();"></textarea></td>
+<td><input type="text" class="item-expiry" aria-label="expiry" oninput="autoSaveDraft()"></td>
+<td><input type="text" class="item-batch" aria-label="batch" oninput="autoSaveDraft()"></td>
+<td><input type="text" class="item-barcode" aria-label="barcode" oninput="autoSaveDraft()"></td>
+<td><input type="text" class="item-sku" aria-label="sku" oninput="autoSaveDraft()"></td>
+<td><input type="text" class="item-unit" aria-label="unit" oninput="autoSaveDraft()"></td>
+<td><input type="number" class="item-qty" aria-label="qty" oninput="calculateTotals()" min="0" step="any"></td>
+<td><input type="number" class="item-price" aria-label="price" oninput="calculateTotals()" min="0" step="any"></td>
+<td><input type="number" class="item-amount" aria-label="amount" readonly min="0" step="any"></td>
+<td><input type="number" class="item-received" aria-label="received" oninput="autoSaveDraft()" min="0" step="any"></td>
+<td><input type="text" class="item-remarks" aria-label="remarks" oninput="autoSaveDraft()"></td>
+<td><input type="text" class="item-expiry-status" aria-label="expiry status" oninput="autoSaveDraft()"></td>
+<td><button class="btn-del" onclick="deleteRow(this)">Remove</button></td>
+`;
+        tr.querySelector(".item-code").value = code;
+        tr.querySelector(".item-desc").value = desc;
+        tr.querySelector(".item-expiry").value = data.Expiry_Date ?? "";
+        tr.querySelector(".item-batch").value = data.Batch_Code ?? "";
+        tr.querySelector(".item-barcode").value = data.Barcode ?? "";
+        tr.querySelector(".item-sku").value = data.SKU_Offline ?? "";
+        tr.querySelector(".item-unit").value = data.Unit ?? "";
+        tr.querySelector(".item-qty").value = qty;
+        tr.querySelector(".item-price").value = price;
+        tr.querySelector(".item-amount").value = data.Final_Amount ?? "0.00";
+        tr.querySelector(".item-received").value = data.Received_Quantity ?? "";
+        tr.querySelector(".item-remarks").value = data.Remarks ?? "NO ISSUES";
+        tr.querySelector(".item-expiry-status").value = data.Batch_Expiry_Status ?? "";
         tbody.appendChild(tr);
 
 
@@ -991,7 +1014,14 @@
 
                 Final_Amount: row.querySelector('.item-amount').value,
 
-                Remarks: row.querySelector('.item-remarks').value
+                Remarks: row.querySelector('.item-remarks').value,
+                Expiry_Date: row.querySelector('.item-expiry').value,
+                Batch_Code: row.querySelector('.item-batch').value,
+                Barcode: row.querySelector('.item-barcode').value,
+                SKU_Offline: row.querySelector('.item-sku').value,
+                Unit: row.querySelector('.item-unit').value,
+                Received_Quantity: row.querySelector('.item-received').value,
+                Batch_Expiry_Status: row.querySelector('.item-expiry-status').value
 
             });
 
@@ -2896,7 +2926,7 @@ return generate;
 })();
 async function downloadDRExcel8A(){
  const btn=document.getElementById('drExcel8A'); if(btn.disabled)return; btn.disabled=true;
- try{const d=getFormData(); d.drNo=String(d.drNo||'').trim(); d.items=d.items.filter(x=>[x.Item_Code,x.Description,x.Qty,x.Unit_Price,x.Remarks].some(v=>String(v??'').trim()!==''&&String(v)!=='0'&&String(v)!=='0.00'));
+ try{const d=getFormData(); d.drNo=String(d.drNo||'').trim(); d.items=d.items.filter(x=>String(x.Item_Code||'').trim()||String(x.Description||'').trim());
  if(!d.drNo||!d.items.length)throw Error('Enter a DR number and at least one product.');
  await loadBackupZipLibrary(); const blob=await drExcelGenerator8A(d); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='DR_'+d.drNo.replace(/[^a-z0-9_-]/gi,'_')+'.xlsx'; document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),10000);
  }catch(e){alert('Excel export failed: '+e.message);}finally{btn.disabled=false;}
