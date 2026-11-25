@@ -2919,6 +2919,24 @@ async function generate(d){
  for(let r=5;r<=12;r++){rows.get(r).setAttribute('ht','45');rows.get(r).setAttribute('customHeight','1');}
  rows.get(14).setAttribute('ht','45');rows.get(14).setAttribute('customHeight','1');
  for(let r=74;r<=84;r++){rows.get(r).setAttribute('ht','24');rows.get(r).setAttribute('customHeight','1');}
+ // Phase 8A.5.2: improve template readability without changing cell mapping.
+ const styles=parse(await zip.file('xl/styles.xml').async('string'));
+ const fonts=styles.getElementsByTagNameNS(ns,'fonts')[0];
+ for(const f of fonts.children){const sz=f.getElementsByTagNameNS(ns,'sz')[0];if(sz&&Number(sz.getAttribute('val'))>12)sz.setAttribute('val','12');}
+ const xfs=styles.getElementsByTagNameNS(ns,'cellXfs')[0];
+ function styleCell(c,border){if(!c)return;const old=xfs.children[Number(c.getAttribute('s')||0)];const copy=old.cloneNode(true);if(border){copy.setAttribute('borderId','1');copy.setAttribute('applyBorder','1');}let a=copy.getElementsByTagNameNS(ns,'alignment')[0];if(!a){a=styles.createElementNS(ns,'alignment');copy.append(a);}a.setAttribute('wrapText','1');a.setAttribute('vertical','center');copy.setAttribute('applyAlignment','1');c.setAttribute('s',String(xfs.children.length));xfs.append(copy);}
+ for(let r=4;r<=12;r++){for(const col of ['A','B','C','D','E','F','G','H','I'])styleCell(cells.get(col+r),true);}
+ const merges=xml.getElementsByTagNameNS(ns,'mergeCells')[0];
+ for(let r=5;r<=10;r++){const ref='E'+r+':I'+r;if(![...merges.children].some(m=>m.getAttribute('ref')===ref)){const m=xml.createElementNS(ns,'mergeCell');m.setAttribute('ref',ref);merges.append(m);}}
+ merges.setAttribute('count',String(merges.children.length));xfs.setAttribute('count',String(xfs.children.length));
+ for(const c of cells.values()){if(c.getAttribute('t')==='inlineStr'){const t=c.getElementsByTagNameNS(ns,'t')[0];if(t)t.textContent=t.textContent.trim();}}
+ const widths=[16,38,16,17,22,16,12,8,15,16,12,22,18];
+ for(const c of xml.getElementsByTagNameNS(ns,'col')){const i=Number(c.getAttribute('min'));if(i<=13&&i===Number(c.getAttribute('max')))c.setAttribute('width',String(widths[i-1]));}
+ for(const v of xml.getElementsByTagNameNS(ns,'sheetView')){v.setAttribute('zoomScale','70');v.setAttribute('zoomScaleNormal','100');}
+ for(let r=5;r<=12;r++)rows.get(r).setAttribute('ht','32');
+ rows.get(14).setAttribute('ht','42');rows.get(57).setAttribute('ht','48');
+ for(let i=0;i<d.items.length;i++){const x=d.items[i];const lines=Math.max(1,Math.ceil(String(x.Description||'').length/32),Math.ceil(String(x.Remarks||'').length/18));rows.get(15+i).setAttribute('ht',String(Math.min(409,Math.max(30,lines*16+8))));}
+ zip.file('xl/styles.xml',new XMLSerializer().serializeToString(styles));
  const ser=new XMLSerializer();zip.file('xl/worksheets/sheet1.xml',ser.serializeToString(xml));zip.file('xl/workbook.xml',ser.serializeToString(wb));return zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
 }
 
