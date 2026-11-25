@@ -1207,7 +1207,27 @@
 
         try {
 
-            const result = await api('/api/receipts', {method:'POST', body:JSON.stringify({...data, shop: data.shopSelect, drNumber: String(data.drNo).trim()})});
+            const healthResponse = await fetch(API_BASE + '/api/health', {cache:'no-store'});
+            if (!healthResponse.ok) throw Error('Backend health check failed.');
+            const health = await healthResponse.json();
+            const payload = {...data, shop: data.shopSelect, drNumber: String(data.drNo).trim()};
+            if (health.excelSaveEnabled === true) {
+                data.drNo = payload.drNumber;
+                data.items = data.items.filter(i => String(i.Item_Code || '').trim() || String(i.Description || '').trim());
+                if (!data.items.length || data.items.length > 40) throw Error('Excel requires 1–40 product rows.');
+                await loadBackupZipLibrary();
+                const blob = await drExcelGenerator8A(data);
+                if (blob.size > 5 * 1024 * 1024) throw Error('Excel file exceeds 5 MB.');
+                const bytes = new Uint8Array(await blob.arrayBuffer());
+                let binary = '';
+                for (let i=0; i<bytes.length; i+=16384) binary += String.fromCharCode(...bytes.subarray(i,i+16384));
+                payload.xlsxBase64 = btoa(binary);
+                payload.items = data.items;
+                payload.drNo = data.drNo;
+            } else if (health.excelSaveEnabled !== false) {
+                throw Error('Excel save setting unavailable; save stopped.');
+            }
+            const result = await api('/api/receipts', {method:'POST', body:JSON.stringify(payload)});
 
             const history = JSON.parse(localStorage.getItem('ijin_dr_history') || '[]');
 
