@@ -194,7 +194,7 @@
 
             <h1>I-JIN INTERNATIONAL</h1>
 
-            <p>Delivery Receipt & Google Drive Sync System | Phase 8A.6</p>
+            <p>Delivery Receipt & Google Drive Sync System | Phase 8A.6.2</p>
 
         </div>
 
@@ -3004,8 +3004,12 @@ async function loadHistoryReceipt86(shop,file,button){
   const d=raw.deliveryReceipt||raw;
   const dr=String(d.drNo||d.drNumber||raw.drNumber||'').trim();
   const actualShop=String(d.shopSelect||raw.shop||'').trim();
-  const expected=String(file.appProperties?.drNumber||(/^DR_(.+)\.(json|xlsx)$/i.exec(file.name)||[])[1]||'').trim();
-  if(!dr||actualShop!==shop||!expected||dr.toLowerCase()!==expected.toLowerCase()||!Array.isArray(d.items)||!d.items.length||d.items.length>1000||d.items.some(x=>!x||typeof x!=='object'||Array.isArray(x)))throw Error('Invalid DR data or identity mismatch.');
+  const filenameDR=(/^DR_(.+)\.(json|xlsx)$/i.exec(file.name)||[])[1]||'';
+  const metadataDR=String(file.appProperties?.drNumber||'').trim();
+  const expected=metadataDR||filenameDR;
+  const legacyExcelMatch=!metadataDR&&/\.xlsx$/i.test(file.name)&&filenameDR.toLowerCase()===(dr+'_8A54').toLowerCase();
+  const identityMatches=dr.toLowerCase()===expected.toLowerCase()||legacyExcelMatch;
+  if(!dr||actualShop!==shop||!expected||!identityMatches||!Array.isArray(d.items)||!d.items.length||d.items.length>1000||d.items.some(x=>!x||typeof x!=='object'||Array.isArray(x)))throw Error('Invalid DR data or identity mismatch.');
   if(authUser!==user)throw Error('Session changed.');
   const fields=['approvedStatus','mainStatus','jenStatus','sirStatus','preparedBy','checkBy','receivedBy','deliveredBy','deliveryDate','drNo','deliverySchedule','totalBoxes','storeCode','shopSelect','deliverTo'];
   const clean={...d,drNo:dr,shopSelect:shop};
