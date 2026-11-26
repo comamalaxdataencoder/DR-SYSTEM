@@ -295,7 +295,7 @@
           <p id="executionStatus" role="status" aria-live="polite">Click Refresh Executions.</p>
           <div id="executionData"></div>
         </section>
-<section class="card" style="margin:16px 0"><h3>Backup Integrity & Recovery Preview — Phase 8A.9A</h3><p class="muted">Read-only check of latest automatic ZIP against its own manifest. Does not prove completeness against live Drive or guarantee restore.</p><button type="button" class="btn-blue" id="integrityVerify">Verify Latest Backup</button><p id="integrityStatus" role="status">Not verified.</p><pre id="integrityReport" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre><div id="recovery9" hidden></div></section>
+<section class="card" style="margin:16px 0"><h3>Backup Integrity & Recovery — Phase 8A.9C</h3><p class="muted">Read-only check of latest automatic ZIP against its own manifest. Does not prove completeness against live Drive or guarantee restore.</p><button type="button" class="btn-blue" id="integrityVerify">Verify Latest Backup</button><p id="integrityStatus" role="status">Not verified.</p><pre id="integrityReport" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre><div id="recovery9" hidden></div></section>
         <p class="muted">Export metadata snapshots or download a ZIP containing actual DR JSON contents from all six shop folders. Only administrators can use these exports.</p>
         <div class="actions" style="margin:18px 0">
           <button type="button" id="backupManifestBtn" class="btn-green" onclick="exportBackupManifest()">📥 Export Backup Manifest (.json)</button>
@@ -1567,8 +1567,8 @@
         const failed=missing||invalid||extra.length||issues.length>duplicates;const state=failed?'FAILED':duplicates?'WARNING':'PASSED';status.textContent='Integrity: '+state;status.style.color=failed?'#f87171':duplicates?'#fbbf24':'#34d399';
         out.textContent=['ZIP: '+name,'Verified (PH): '+new Date().toLocaleString('en-PH',{timeZone:'Asia/Manila'}),'Expected records: '+m.records.length,'Actual entries: '+actual.length,'Valid JSON: '+jsonCount,'Valid XLSX: '+xlsxCount,'Missing: '+missing,'Invalid: '+invalid,'Duplicate DR occurrences: '+duplicates,'Unlisted: '+extra.length,'CRC32 check: passed',...issues,'No Drive files changed.'].join('\n');
         if(!failed){
-          const heading=document.createElement('h3');heading.textContent='Recovery preview — download original backup files';recovery.appendChild(heading);
-          const note=document.createElement('p');note.textContent='Read-only. Duplicate DR groups are excluded. Downloads do not restore files to Drive.';recovery.appendChild(note);
+          const heading=document.createElement('h3');heading.textContent='Recovery — download or restore backup files';recovery.appendChild(heading);
+          const note=document.createElement('p');note.textContent='Duplicate DR groups are excluded. Restore creates new files only; pause encoding and Drive edits before restoring.';recovery.appendChild(note);
           for(const item of recoverable.filter(x=>!duplicateKeys.has(x.k))){
             const line=document.createElement('div');line.style.margin='8px 0';
             const label=document.createElement('span');label.textContent=item.shop+' / '+item.dr+' ('+item.ext.toUpperCase()+') ';line.appendChild(label);
@@ -1580,7 +1580,26 @@
               const blob=new Blob([bytes],{type:item.ext==='xlsx'?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'application/json'});
               const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
             }catch(e){alert('Download failed: '+e.message);}finally{download.disabled=false;}});
-            line.appendChild(download);recovery.appendChild(line);
+            line.appendChild(download);
+            const restore=document.createElement('button');restore.type='button';restore.className='btn-teal';restore.style.marginLeft='8px';restore.textContent='Restore to Google Drive';
+            const result=document.createElement('span');result.setAttribute('role','status');result.style.marginLeft='8px';
+            restore.onclick=async()=>{
+              if(!current()||btn.disabled||recovery.dataset.busy==='1')return;
+              if(!confirm('Restore '+item.shop+' / '+item.dr+' ('+item.ext.toUpperCase()+')? Pause all DR encoding and Drive edits first. Existing records must not be overwritten.'))return;
+              recovery.dataset.busy='1';btn.disabled=true;restore.disabled=true;result.textContent='Restoring...';
+              try{
+                const bytes=await item.entry.async('uint8array');if(!current())return;
+                let response;
+                if(item.ext==='xlsx')response=await api('/api/admin/backup/restore-excel',{method:'POST',headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'},body:bytes});
+                else {const raw=JSON.parse(new TextDecoder().decode(bytes));response=await api('/api/admin/backup/restore',{method:'POST',body:JSON.stringify(raw)});}
+                if(!current())return;
+                if(response.status==='restored'){result.textContent='Restored'+(response.auditLogged===false?' — audit log failed':'')+'; refresh DR counts.';result.style.color='#34d399';}
+                else if(response.status==='skipped'){result.textContent='Skipped: '+(response.message||'Existing DR conflict');result.style.color='#fbbf24';}
+                else throw Error('Unexpected restore response; check Drive before retrying.');
+              }catch(e){if(current()){result.textContent='Restore not confirmed: '+e.message+' — check Drive before retrying.';result.style.color='#f87171';}}
+              finally{delete recovery.dataset.busy;if(current()){btn.disabled=false;restore.disabled=false;}}
+            };
+            line.append(restore,result);recovery.appendChild(line);
           }recovery.hidden=false;
         }
       }catch(e){if(current()){status.textContent='Verification failed: '+e.message;status.style.color='#f87171';}}finally{btn.disabled=false;}
