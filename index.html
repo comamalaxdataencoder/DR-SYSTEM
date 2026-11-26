@@ -194,7 +194,7 @@
 
             <h1>I-JIN INTERNATIONAL</h1>
 
-            <p>Delivery Receipt & Google Drive Sync System | Phase 8A.6.2</p>
+            <p>Delivery Receipt & Google Drive Sync System | Phase 8A.7</p>
 
         </div>
 
@@ -657,6 +657,9 @@
 
     </div>
 
+<div class="card"><div class="card-title">Tester Items <span>Maximum 13 rows</span></div><div class="table-responsive"><table style="min-width:1450px"><thead><tr><th>Tester Item Code</th><th>Tester Item Description</th><th>Tester Quantity</th><th>Tester Received By</th><th>Tester Condition</th><th>Tester Expiry Date</th><th>Tester Batch Code</th><th>Tester Received Date</th><th>Tester Remarks</th><th>Remarks / Notes</th><th>Action</th></tr></thead><tbody id="testerBody87"></tbody></table></div><button type="button" class="btn-add" onclick="addTester87()">+ Add Tester</button></div>
+<div class="card"><div class="card-title">Checklist</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px"><label><input type="checkbox" id="check87_0" onchange="autoSaveDraft()"> ACRYLIC PATCH</label><label><input type="checkbox" id="check87_1" onchange="autoSaveDraft()"> VMD's</label><label><input type="checkbox" id="check87_2" onchange="autoSaveDraft()"> Shelf Strips</label><label><input type="checkbox" id="check87_3" onchange="autoSaveDraft()"> Top Shelves</label><label><input type="checkbox" id="check87_4" onchange="autoSaveDraft()"> Correction Tape</label><label><input type="checkbox" id="check87_5" onchange="autoSaveDraft()"> Alcohol</label><label><input type="checkbox" id="check87_6" onchange="autoSaveDraft()"> Wipes</label><label><input type="checkbox" id="check87_7" onchange="autoSaveDraft()"> Tissue</label><label><input type="checkbox" id="check87_8" onchange="autoSaveDraft()"> Ballpen</label><label><input type="checkbox" id="check87_9" onchange="autoSaveDraft()"> Calculator</label><label><input type="checkbox" id="check87_10" onchange="autoSaveDraft()"> Inventory Sheet</label></div></div>
+<div class="card"><div class="card-title">Notes & Delivery Signature</div><label for="notes87">Notes / Additional Remarks</label><textarea id="notes87" rows="4" oninput="autoSaveDraft()" style="display:block;width:100%;margin:8px 0;background:#0f172a;color:inherit;border:1px solid #475569;padding:10px"></textarea><table class="field-table"><tr><td>Receiver's Name</td><td><input id="receiverName87" oninput="autoSaveDraft()"></td></tr><tr><td>Receiver's Position</td><td><input id="receiverPosition87" oninput="autoSaveDraft()"></td></tr></table></div>
     </div><!-- /encodingWindow -->
 
 </div>
@@ -962,6 +965,22 @@
 
 
 
+
+    const testerKeys87 = ["Item_Code", "Description", "Quantity", "Received_By", "Condition", "Expiry_Date", "Batch_Code", "Received_Date", "Remarks", "Notes"];
+    function addTester87(data={}, silent=false){
+      const body=document.getElementById('testerBody87');
+      if(body.rows.length>=13){if(!silent)alert('Maximum 13 tester rows.');return;}
+      const tr=document.createElement('tr');
+      for(const key of testerKeys87){const td=tr.insertCell();const input=document.createElement('input');input.dataset.key=key;input.setAttribute('aria-label',key);input.type=key==='Quantity'?'number':'text';if(key==='Quantity'){input.min='0';input.step='1';}input.value=data[key]??'';input.addEventListener('input',autoSaveDraft);td.append(input);}
+      const b=document.createElement('button');b.type='button';b.className='btn-del';b.textContent='Remove';b.onclick=()=>{tr.remove();autoSaveDraft();};tr.insertCell().append(b);body.append(tr);if(!silent)autoSaveDraft();
+    }
+    function extras87(d){
+      const testers=d.testers??[];if(!Array.isArray(testers)||testers.length>13||testers.some(t=>!t||typeof t!=='object'||Array.isArray(t)||testerKeys87.some(k=>t[k]!=null&&!['string','number'].includes(typeof t[k]))))throw Error('Invalid tester data');
+      const checklist=d.checklist??[];if(!Array.isArray(checklist)||checklist.length>11||checklist.some(v=>typeof v!=='boolean'))throw Error('Invalid checklist data');
+      for(const k of ['notes','receiverName','receiverPosition'])if(d[k]!=null&&typeof d[k]!=='string')throw Error('Invalid '+k);
+      return {testers,checklist,notes:d.notes??'',receiverName:d.receiverName??'',receiverPosition:d.receiverPosition??''};
+    }
+    function applyExtras87(d){const x=extras87(d);document.getElementById('testerBody87').replaceChildren();x.testers.forEach(t=>addTester87(t,true));for(let i=0;i<11;i++)document.getElementById('check87_'+i).checked=x.checklist[i]===true;for(const k of ['notes','receiverName','receiverPosition'])document.getElementById(k+'87').value=x[k];}
     function getFormData() {
 
         let formData = {
@@ -1027,6 +1046,9 @@
 
         });
 
+        formData.testers=Array.from(document.querySelectorAll('#testerBody87 tr'),r=>Object.fromEntries(Array.from(r.querySelectorAll('input'),i=>[i.dataset.key,i.value]))).filter(t=>Object.values(t).some(v=>String(v).trim()));
+        formData.checklist=Array.from({length:11},(_,i)=>document.getElementById('check87_'+i).checked);
+        for(const k of ['notes','receiverName','receiverPosition'])formData[k]=document.getElementById(k+'87').value;
         return formData;
 
     }
@@ -1048,6 +1070,7 @@
         if (saved) {
 
             let data = JSON.parse(saved);
+            applyExtras87(data);
 
             document.getElementById('approvedStatus').value = data.approvedStatus || '';
 
@@ -1226,6 +1249,7 @@
     async function saveOnlyToGoogleDrive() {
 
         const data = getFormData();
+        if(data.testers.some(t=>t.Quantity!==''&&(!Number.isInteger(Number(t.Quantity))||Number(t.Quantity)<0))){alert('Tester quantity must be a nonnegative whole number.');return;}
 
         if (!data.shopSelect || !String(data.drNo).trim() || !data.items.some(i => String(i.Item_Code || i.Description || '').trim())) {
 
@@ -2662,6 +2686,7 @@
         if (!confirm('Start a new DR? Make sure you have saved the current DR first.')) return;
 
         localStorage.removeItem('ijin_dr_draft');
+        applyExtras87({});
 
         document.getElementById('approvedStatus').value = 'APPROVED FOR DELIVERY';
 
@@ -2903,7 +2928,12 @@ async function generate(d){
  const map={B5:'approvedStatus',B6:'mainStatus',B7:'jenStatus',B8:'sirStatus',B9:'preparedBy',B10:'checkBy',B11:'receivedBy',B12:'deliveredBy',E6:'drNo',E10:'storeCode',E11:'deliverTo'};for(const [a,k] of Object.entries(map))put(a,d[k]);put('E5',date(d.deliveryDate));put('E7',date(d.deliverySchedule));put('E8',num(d.totalBoxes));
  let total=0,qty=0;for(let i=0;i<40;i++){let r=15+i,x=d.items[i]||{};let q=num(x.Qty),p=num(x.Unit_Price);let a=q!==null&&p!==null?q*p:null;let vals=[x.Item_Code,x.Description,x.Expiry_Date,x.Batch_Code,x.Barcode,x.SKU_Offline,x.Unit,q,p,a,num(x.Received_Quantity),x.Remarks,x.Batch_Expiry_Status];vals.forEach((v,j)=>put(String.fromCharCode(65+j)+r,v,j===9&&a!==null?'H'+r+'*I'+r:null));qty+=q||0;total+=a||0;rows.get(r).setAttribute('hidden',i>=Math.max(1,d.items.length)?'1':'0');}
  put('H55',qty,'SUM(H15:H54)');put('J55',total,'SUM(J15:J54)');put('E9',total,'J55');
- for(let r=58;r<=70;r++){for(const c of ['A','B','C','D','E','F','G','H','J','L'])put(c+r,null);rows.get(r).setAttribute('hidden',r===58?'0':'1');}for(let r=74;r<=84;r++)put('E'+r,'[ ] Checked');
+ const extra=extras87(d);
+ if(extra.testers.some(t=>t.Quantity!==undefined&&t.Quantity!==''&&(!Number.isInteger(Number(t.Quantity))||Number(t.Quantity)<0)))throw Error('Invalid tester quantity');
+ for(let i=0;i<13;i++){const r=58+i,t=extra.testers[i]||{};const vals=[t.Item_Code,t.Description,num(t.Quantity),t.Received_By,t.Condition,t.Expiry_Date,t.Batch_Code,t.Received_Date,t.Remarks,t.Notes];['A','B','C','D','E','F','G','H','J','L'].forEach((c,j)=>put(c+r,vals[j]));rows.get(r).setAttribute('hidden',i>=Math.max(1,extra.testers.length)?'1':'0');}
+ for(let i=0;i<11;i++)put('E'+(74+i),extra.checklist[i]?'[X] Checked':'[ ] Checked');
+ put('A87',extra.notes);put('A89','Delivery Signature: Receiver: '+(extra.receiverName||'________________')+' | Position: '+(extra.receiverPosition||'________________'));
+
  let ps=xml.getElementsByTagNameNS(ns,'pageSetup')[0];if(!ps){ps=xml.createElementNS(ns,'pageSetup');const pm=xml.getElementsByTagNameNS(ns,'pageMargins')[0];pm.after(ps);}ps.setAttribute('paperSize','9');ps.setAttribute('orientation','portrait');ps.setAttribute('fitToWidth','1');ps.setAttribute('fitToHeight','0');ps.removeAttribute('scale');let pr=xml.getElementsByTagNameNS(ns,'pageSetUpPr')[0];if(!pr){let sp=xml.getElementsByTagNameNS(ns,'sheetPr')[0];if(!sp){sp=xml.createElementNS(ns,'sheetPr');xml.documentElement.prepend(sp);}pr=xml.createElementNS(ns,'pageSetUpPr');sp.append(pr);}pr.setAttribute('fitToPage','1');
  let dn=wb.getElementsByTagNameNS(ns,'definedNames')[0];if(!dn){dn=wb.createElementNS(ns,'definedNames');let sh=wb.getElementsByTagNameNS(ns,'sheets')[0];sh.after(dn);}let pa=[...dn.children].find(x=>x.getAttribute('name')==='_xlnm.Print_Area');if(!pa){pa=wb.createElementNS(ns,'definedName');dn.append(pa);}pa.setAttribute('name','_xlnm.Print_Area');pa.setAttribute('localSheetId','0');pa.textContent="'INGRESS_04-10-2026'!$A$1:$M$89";
  // Remove obsolete calculation-chain metadata; Excel rebuilds it on open.
@@ -2949,7 +2979,8 @@ async function generate(d){
  for(const c of cells.values()){if(c.getAttribute('t')==='inlineStr'){const t=c.getElementsByTagNameNS(ns,'t')[0];if(t)t.textContent=t.textContent.trim();}}
  for(let r=4;r<=12;r++)height(r,32);height(2,24);height(3,24);height(14,48);height(57,58);height(58,32);height(55,25);
  for(let i=0;i<d.items.length;i++){const x=d.items[i];const lines=Math.max(1,...[[x.Description,23],[x.Barcode,16],[x.Batch_Code,11],[x.Remarks,13],[x.Batch_Expiry_Status,12]].map(([v,w])=>Math.ceil(String(v||'').length/w)));height(15+i,Math.min(409,Math.max(32,lines*16+10)));}
- for(let r=73;r<=84;r++)height(r,23);height(86,22);height(87,25);height(88,64);height(89,64);
+ for(let i=0;i<extra.testers.length;i++){const t=extra.testers[i];height(58+i,Math.min(409,Math.max(32,...Object.values(t).map(v=>Math.ceil(String(v??'').length/12)*16+10))));}
+ for(let r=73;r<=84;r++)height(r,23);height(86,22);height(87,Math.min(409,Math.max(25,Math.ceil(extra.notes.length/95)*16+10)));height(88,64);height(89,64);
  const pm=xml.getElementsByTagNameNS(ns,'pageMargins')[0];for(const [k,v] of Object.entries({left:0.25,right:0.25,top:0.35,bottom:0.35}))pm.setAttribute(k,String(v));
  for(const v of xml.getElementsByTagNameNS(ns,'sheetView')){v.setAttribute('zoomScale','80');v.setAttribute('zoomScaleNormal','100');}
  fonts.setAttribute('count',String(fonts.children.length));xfs.setAttribute('count',String(xfs.children.length));
@@ -2982,7 +3013,7 @@ async function downloadDRExcel8A(){
  const btn=document.getElementById('drExcel8A'); if(btn.disabled)return; btn.disabled=true;
  try{const d=getFormData(); d.drNo=String(d.drNo||'').trim(); d.items=d.items.filter(x=>String(x.Item_Code||'').trim()||String(x.Description||'').trim());
  if(!d.drNo||!d.items.length)throw Error('Enter a DR number and at least one product.');
- await loadBackupZipLibrary(); const blob=await drExcelGenerator8A(d); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='DR_'+d.drNo.replace(/[^a-z0-9_-]/gi,'_')+'_8A54.xlsx'; document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),10000); alert('Phase 8A.5.4: Excel XML validation passed. Open the new _8A54.xlsx file and check Print Preview.');
+ await loadBackupZipLibrary(); const blob=await drExcelGenerator8A(d); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='DR_'+d.drNo.replace(/[^a-z0-9_-]/gi,'_')+'_8A54.xlsx'; document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),10000); alert('Phase 8A.7: Excel XML validation passed. Check Tester Items, Checklist, Notes and Print Preview.');
  }catch(e){alert('Excel export failed: '+e.message);}finally{btn.disabled=false;}
 }
 
@@ -3015,6 +3046,8 @@ async function loadHistoryReceipt86(shop,file,button){
   const clean={...d,drNo:dr,shopSelect:shop};
   for(const k of fields)if(clean[k]!=null&& !['string','number'].includes(typeof clean[k]))throw Error('Invalid field '+k);
   for(const k of fields){const el=document.getElementById(k);if(el.tagName==='SELECT'&&k!=='deliverTo'&&clean[k]&&!Array.from(el.options).some(o=>o.value===String(clean[k])))throw Error('Unsupported selection: '+k);}
+  extras87(clean);
+  applyExtras87(clean);
   document.getElementById('itemsBody').replaceChildren();
   for(const k of fields){const el=document.getElementById(k);if(k==='deliverTo'&&clean[k]&&el.tagName==='SELECT'&&!Array.from(el.options).some(o=>o.value===String(clean[k])))el.add(new Option(String(clean[k]),String(clean[k])));el.value=clean[k]??'';if(k==='shopSelect')updateDeliverToBranches();}
   clean.items.forEach(x=>addRow(x));calculateTotals();autoSaveDraft();document.getElementById('driveHistoryOverlay')?.remove();alert('DR loaded: '+dr+' (saved snapshot; not a new Drive save).');
