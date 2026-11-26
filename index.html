@@ -194,7 +194,7 @@
 
             <h1>I-JIN INTERNATIONAL</h1>
 
-            <p>Delivery Receipt & Google Drive Sync System | Phase 8A.13B</p>
+            <p>Delivery Receipt & Google Drive Sync System | Phase 8A.13C</p>
 
         </div>
 
@@ -231,7 +231,7 @@
 
       <div id="adminStaff" class="card admin-content"><h3>Staff Accounts</h3><p class="muted">Staff accounts are managed through the secure Cloudflare backend. Up to 9 active staff accounts.</p><form id="staffForm" class="staff-form"><label>Full name<input id="staffName" placeholder="Staff full name" required></label><label>Work email<input id="staffEmail" type="email" placeholder="staff\@company.com" required></label><label>Temporary password<input id="staffPassword" type="password" minlength="12" placeholder="At least 12 characters" required></label><button id="addStaffBtn" class="btn-green" type="submit">+ Add Staff</button></form><p id="adminError" role="alert"></p><button type="button" class="btn-blue" onclick="loadStaff()">↻ Refresh Staff List</button><div id="staffList" class="staff-list"></div></div>
 
-      <div id="adminRecords" class="card admin-content" hidden><h3>DR Records by Shop</h3><p class="muted">Counts reflect Google Drive after successful synchronization.</p><button class="btn-blue" onclick="adminRefreshCounts()">🔄 Refresh Counts</button><p id="adminCountStatus" class="muted" role="status"></p><div id="adminShopCounts" class="admin-shop-grid"></div><section class="card"><h3>Migration Center — Phase 8A.13B</h3><p class="muted">Read-only live inventory. Pause encoding and Drive edits while scanning. Candidates may be tested by downloading one converted Excel locally. No Drive files are created, moved or deleted.</p><button type="button" class="btn-blue" onclick="scanMigration813(this)">Scan Migration Preview</button><p id="migrationStatus813" role="status">Not scanned.</p><div class="table-responsive" id="migrationRows813"></div></section><section class="card"><h3>Duplicate DR Monitoring — Phase 7I</h3><p class="muted">Read-only metadata and filename review. Does not inspect JSON contents or guarantee concurrent-save protection.</p><button id="dupRefresh7I" class="btn-blue">Scan Duplicate DRs</button> <button id="dupExport7I" class="btn-green" disabled>Export Duplicate Report (.xlsx)</button><p id="dupStatus7I" role="status">Not scanned.</p><pre id="dupRows7I" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre><div id="dupCompare7K"></div></section></div>
+      <div id="adminRecords" class="card admin-content" hidden><h3>DR Records by Shop</h3><p class="muted">Counts reflect Google Drive after successful synchronization.</p><button class="btn-blue" onclick="adminRefreshCounts()">🔄 Refresh Counts</button><p id="adminCountStatus" class="muted" role="status"></p><div id="adminShopCounts" class="admin-shop-grid"></div><section class="card"><h3>Migration Center — Phase 8A.13C</h3><p class="muted">Read-only live inventory. Pause encoding and Drive edits while scanning. Candidates may be tested by downloading one converted Excel locally. Pilot migration is restricted to TEST-8A6-001. Pause all encoding and Drive edits before migration.</p><button type="button" class="btn-blue" onclick="scanMigration813(this)">Scan Migration Preview</button><p id="migrationStatus813" role="status">Not scanned.</p><div class="table-responsive" id="migrationRows813"></div></section><section class="card"><h3>Duplicate DR Monitoring — Phase 7I</h3><p class="muted">Read-only metadata and filename review. Does not inspect JSON contents or guarantee concurrent-save protection.</p><button id="dupRefresh7I" class="btn-blue">Scan Duplicate DRs</button> <button id="dupExport7I" class="btn-green" disabled>Export Duplicate Report (.xlsx)</button><p id="dupStatus7I" role="status">Not scanned.</p><pre id="dupRows7I" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre><div id="dupCompare7K"></div></section></div>
 
       <div id="adminActivity" class="card admin-content" hidden>
         <h3>Recent Activity</h3><p class="muted">Server-recorded login, logout, DR saving, staff management and password reset requests.</p>
@@ -1175,7 +1175,7 @@ window.scanMigration813 = async function scanMigration813(btn){
  const table=document.createElement('table');table.className='dash-table';
  const add=(values,head=false)=>{const tr=table.insertRow();for(const value of values){const cell=document.createElement(head?'th':'td');cell.textContent=String(value??'');tr.append(cell);}};
  add(['Shop','File','Format','DR Number','Items','Status','Reason','Test conversion'],true);
- for(const r of rows){add([r.shop,r.name,r.format,r.drNumber,r.items,r.status,r.reason]);const cell=table.rows[table.rows.length-1].insertCell();if(!errors.length&&r.status==='CANDIDATE'){const b=document.createElement('button');b.className='btn-blue';b.textContent='Test Excel';b.onclick=()=>testMigration813B(r,b);cell.append(b);}}root.append(table);
+ for(const r of rows){add([r.shop,r.name,r.format,r.drNumber,r.items,r.status,r.reason]);const cell=table.rows[table.rows.length-1].insertCell();if(!errors.length&&r.status==='CANDIDATE'){const b=document.createElement('button');b.className='btn-blue';b.textContent='Test Excel';b.onclick=()=>testMigration813B(r,b);cell.append(b);if(r.shop==='Robinsons'&&r.drNumber==='TEST-8A6-001'){const m=document.createElement('button');m.className='btn-green';m.textContent='Migrate Pilot';m.onclick=()=>testMigration813B(r,m,true);cell.append(m);}}}root.append(table);
  const count=s=>rows.filter(r=>r.status===s).length;
  status.textContent=(errors.length?'INCOMPLETE — ':'Preview complete — ')+rows.length+' files | JSON: '+rows.filter(r=>r.format==='JSON').length+' | XLSX: '+rows.filter(r=>r.format==='XLSX').length+' | Candidates: '+count('CANDIDATE')+' | Conflicts (files): '+count('CONFLICT')+' | Review: '+count('REVIEW')+' | Other files ignored: '+ignored+'. '+errors.join(' / ');
  }finally{btn.disabled=false;if(!current()){root.replaceChildren();status.textContent='Not scanned.';}}
@@ -1183,9 +1183,9 @@ window.scanMigration813 = async function scanMigration813(btn){
 
 
 let migrationBusy813B=false;
-async function testMigration813B(row,button){
+async function testMigration813B(row,button,migrate=false){
  if(migrationBusy813B||userRole!=='admin'||!authUser)return;
- if(!confirm('Convert '+row.drNumber+' to a local test Excel? Original Drive file remains unchanged.'))return;
+ if(!confirm(migrate?'Confirm all encoding and Drive edits are paused, and a fresh backup is verified. Migrate pilot only?':'Convert '+row.drNumber+' to a local test Excel? Original Drive file remains unchanged.'))return;
  const user=authUser;const current=()=>authUser===user&&userRole==='admin';
  migrationBusy813B=true;button.disabled=true;
  try{
@@ -1209,9 +1209,10 @@ async function testMigration813B(row,button){
  const xml=new DOMParser().parseFromString(await zip.file('customXml/ijinReceipt86.xml').async('string'),'application/xml');
  if(xml.documentElement.namespaceURI!=='urn:ijin:dr:86'||JSON.stringify(JSON.parse(xml.documentElement.textContent))!==JSON.stringify(d))throw Error('Snapshot roundtrip mismatch.');
  if(!current())throw Error('Session changed.');
+ if(migrate){const bytes=new Uint8Array(await blob.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));const result=await api('/api/admin/migration/pilot',{method:'POST',body:JSON.stringify({shop:row.shop,drNumber:dr,id:row.id,xlsxBase64:btoa(binary)})});alert('Pilot '+result.status+'; archive ID: '+result.archiveId+'; audit logged: '+result.auditLogged+'. Rescan and verify Drive.');return;}
  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='MIGRATION_TEST_DR_'+dr+'.xlsx';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);
  alert('Test Excel generated. ZIP CRC and original JSON snapshot roundtrip passed. Open in Excel and compare visible fields. No Drive files changed.');
- }catch(e){alert('Migration test stopped: '+e.message);}finally{migrationBusy813B=false;button.disabled=false;}
+ }catch(e){alert((migrate?'Pilot stopped; inspect Drive and archive before retrying: ':'Migration test stopped: ')+e.message);}finally{migrationBusy813B=false;button.disabled=false;}
 }
 
     async function api(path, options = {}) {
