@@ -295,7 +295,7 @@
           <p id="executionStatus" role="status" aria-live="polite">Click Refresh Executions.</p>
           <div id="executionData"></div>
         </section>
-<section class="card" style="margin:16px 0"><h3>Backup Integrity Verification — Phase 8A.8</h3><p class="muted">Read-only check of latest automatic ZIP against its own manifest. Does not prove completeness against live Drive or guarantee restore.</p><button type="button" class="btn-blue" id="integrityVerify">Verify Latest Backup</button><p id="integrityStatus" role="status">Not verified.</p><pre id="integrityReport" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></section>
+<section class="card" style="margin:16px 0"><h3>Backup Integrity & Recovery Preview — Phase 8A.9A</h3><p class="muted">Read-only check of latest automatic ZIP against its own manifest. Does not prove completeness against live Drive or guarantee restore.</p><button type="button" class="btn-blue" id="integrityVerify">Verify Latest Backup</button><p id="integrityStatus" role="status">Not verified.</p><pre id="integrityReport" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre><div id="recovery9" hidden></div></section>
         <p class="muted">Export metadata snapshots or download a ZIP containing actual DR JSON contents from all six shop folders. Only administrators can use these exports.</p>
         <div class="actions" style="margin:18px 0">
           <button type="button" id="backupManifestBtn" class="btn-green" onclick="exportBackupManifest()">📥 Export Backup Manifest (.json)</button>
@@ -1504,6 +1504,7 @@
       if(userRole!=='admin'||!authUser)return;
       const user=authUser, btn=this, status=document.getElementById('integrityStatus'), out=document.getElementById('integrityReport');
       const current=()=>authUser===user&&userRole==='admin';
+      const recovery=document.getElementById('recovery9'); recovery.replaceChildren(); recovery.hidden=true;
       btn.disabled=true;out.textContent='';status.textContent='Verifying latest ZIP...';status.style.color='';
       try {
         const token=await user.getIdToken();
@@ -1518,6 +1519,7 @@
         await Z.loadAsync(bytes,{checkCRC32:true});
         const mf=zip.file('backup_manifest.json');if(!mf)throw new Error('Automatic backup manifest missing');
         const m=JSON.parse(await mf.async('string'));if(!Array.isArray(m.records)||!Array.isArray(m.coverage)||!m.records.length||m.records.length>1000)throw new Error('Invalid manifest');
+        const recoverable=[], duplicateKeys=new Set();
         const issues=[], paths=new Set(), keys=new Map();let missing=0,invalid=0,duplicates=0,jsonCount=0,xlsxCount=0;
         for(const x of m.records){
           const path=x?.path, ext=typeof path==='string'?(/\.(json|xlsx)$/i.exec(path)||[])[1]?.toLowerCase():null;
@@ -1554,7 +1556,8 @@
               if(d.items.length<1||d.items.length>1000)throw Error('Invalid Excel item count');
               extras87(d);xlsxCount++;
             }else jsonCount++;
-            const k=shop.toLowerCase()+'\u0000'+dr.toLowerCase();if(keys.has(k)){duplicates++;issues.push('Duplicate DR: '+shop+' / '+dr);}else keys.set(k,path);
+            const k=shop.toLowerCase()+'\u0000'+dr.toLowerCase();if(keys.has(k)){duplicates++;duplicateKeys.add(k);issues.push('Duplicate DR: '+shop+' / '+dr);}else keys.set(k,path);
+            recoverable.push({k,shop,dr,ext,entry:e,filename:x.filename});
           }catch(e){invalid++;issues.push(path+': '+e.message);}
         }
         const actual=entries.filter(e=>e.name!=='backup_manifest.json');const extra=actual.filter(e=>!paths.has(e.name));for(const e of extra)issues.push('Unlisted entry: '+e.name);
@@ -1563,6 +1566,23 @@
         if(!current())return;
         const failed=missing||invalid||extra.length||issues.length>duplicates;const state=failed?'FAILED':duplicates?'WARNING':'PASSED';status.textContent='Integrity: '+state;status.style.color=failed?'#f87171':duplicates?'#fbbf24':'#34d399';
         out.textContent=['ZIP: '+name,'Verified (PH): '+new Date().toLocaleString('en-PH',{timeZone:'Asia/Manila'}),'Expected records: '+m.records.length,'Actual entries: '+actual.length,'Valid JSON: '+jsonCount,'Valid XLSX: '+xlsxCount,'Missing: '+missing,'Invalid: '+invalid,'Duplicate DR occurrences: '+duplicates,'Unlisted: '+extra.length,'CRC32 check: passed',...issues,'No Drive files changed.'].join('\n');
+        if(!failed){
+          const heading=document.createElement('h3');heading.textContent='Recovery preview — download original backup files';recovery.appendChild(heading);
+          const note=document.createElement('p');note.textContent='Read-only. Duplicate DR groups are excluded. Downloads do not restore files to Drive.';recovery.appendChild(note);
+          for(const item of recoverable.filter(x=>!duplicateKeys.has(x.k))){
+            const line=document.createElement('div');line.style.margin='8px 0';
+            const label=document.createElement('span');label.textContent=item.shop+' / '+item.dr+' ('+item.ext.toUpperCase()+') ';line.appendChild(label);
+            const download=document.createElement('button');download.type='button';download.className='btn-blue';download.textContent='Download original';
+            download.addEventListener('click',async()=>{if(!current())return;download.disabled=true;try{
+              const bytes=await item.entry.async('uint8array');if(!current())return;
+              const filename=String(item.filename||'').replace(/[\\/\x00-\x1f]/g,'_');
+              if(!filename||!filename.toLowerCase().endsWith('.'+item.ext))throw Error('Invalid filename');
+              const blob=new Blob([bytes],{type:item.ext==='xlsx'?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'application/json'});
+              const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+            }catch(e){alert('Download failed: '+e.message);}finally{download.disabled=false;}});
+            line.appendChild(download);recovery.appendChild(line);
+          }recovery.hidden=false;
+        }
       }catch(e){if(current()){status.textContent='Verification failed: '+e.message;status.style.color='#f87171';}}finally{btn.disabled=false;}
     });
     document.getElementById('executionRefresh').addEventListener('click',loadBackupExecutions);
