@@ -194,7 +194,7 @@
 
             <h1>I-JIN INTERNATIONAL</h1>
 
-            <p>Delivery Receipt & Google Drive Sync System | Phase 8A.8</p>
+            <p>Delivery Receipt & Google Drive Sync System | Phase 8A.10</p>
 
         </div>
 
@@ -1278,8 +1278,8 @@
                 payload.xlsxBase64 = btoa(binary);
                 payload.items = data.items;
                 payload.drNo = data.drNo;
-            } else if (health.excelSaveEnabled !== false) {
-                throw Error('Excel save setting unavailable; save stopped.');
+            } else {
+                throw Error('Excel saving is disabled on the backend; no JSON fallback. Contact administrator.');
             }
             const result = await api('/api/receipts', {method:'POST', body:JSON.stringify(payload)});
 
@@ -1291,7 +1291,7 @@
 
             await syncGoogleDriveHistory(true);
 
-            alert('Saved to company Google Drive!\nFile: ' + result.name);
+            alert('Saved Excel to company Google Drive!\nFile: ' + result.name);
 
         } catch(e) {alert(/duplicate DR|pending save/i.test(e.message) ? 'DUPLICATE DR WARNING\n'+e.message : 'Save failed: '+e.message)} finally {btn.disabled=false}
 
